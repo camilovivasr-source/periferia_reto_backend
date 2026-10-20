@@ -1,6 +1,77 @@
+import { GoogleAuth } from 'google-auth-library';
 import { z } from 'zod';
 import { LlmError, type LlmAdapter, type Mensaje, type Respuesta } from './adapter.js';
 import type { HerramientaDef } from '../tools/registry.js';
+
+/** A donde y con que credenciales se llama a generateContent: AI Studio (clave) o Vertex AI (identidad del servicio). */
+export type Destino = {
+  proveedor: string;
+  url(modelo: string): Promise<string>;
+  cabeceras(): Promise<Record<string, string>>;
+  /** Texto para el usuario cuando el proveedor rechaza la credencial. */
+  ayudaPermisos: string;
+};
+
+export function destinoAiStudio(apiKey: string): Destino {
+  return {
+    proveedor: 'google-gemini',
+    url: async (modelo) => `https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`,
+    cabeceras: async () => ({ 'x-goog-api-key': apiKey }),
+    ayudaPermisos: 'clave o permisos del modelo invalidos',
+  };
+}
+
+/**
+ * Vertex AI con credenciales por defecto de la aplicacion (ADC): en Cloud Run, la cuenta de servicio del backend
+ * (rol roles/aiplatform.user); en local, `gcloud auth application-default login`. No hay clave que guardar.
+ */
+export function destinoVertex(opciones: { project?: string; location: string; auth?: Pick<GoogleAuth, 'getAccessToken' | 'getProjectId'> }): Destino {
+  const auth = opciones.auth ?? new GoogleAuth({ scopes: ['https://www.googleapis.com/auth/cloud-platform'] });
+  return {
+    proveedor: 'google-vertex-ai',
+    url: async (modelo) => {
+      const proyecto = opciones.project || (await auth.getProjectId().catch(() => ''));
+      if (!proyecto) throw new LlmError('No se pudo determinar el proyecto de Google Cloud para Vertex AI (defina GOOGLE_CLOUD_PROJECT).');
+      const l = opciones.location;
+      const host = l === 'global' ? 'aiplatform.googleapis.com' : `${l}-aiplatform.googleapis.com`;
+      return `https://${host}/v1/projects/${proyecto}/locations/${l}/publishers/google/models/${modelo}:generateContent`;
+    },
+    cabeceras: async () => {
+      const token = await auth.getAccessToken().catch(() => null);
+      if (!token) throw new LlmError('No hay credenciales de Google Cloud para llamar a Vertex AI (ADC). Revise la cuenta de servicio del backend.');
+      return { Authorization: `Bearer ${token}` };
+    },
+    ayudaPermisos: 'falta el rol roles/aiplatform.user de la cuenta de servicio, la API aiplatform.googleapis.com o el modelo no esta disponible en la region',
+  };
+}
+
+type Esquema = Record<string, unknown>;
+const TIPOS = new Set(['string', 'number', 'integer', 'boolean', 'array', 'object']);
+
+/**
+ * JSON Schema (zod) -> subconjunto OpenAPI que aceptan Gemini y Vertex: tipos en mayusculas, sin
+ * additionalProperties/$schema, y sin propiedades de objeto libre (el modelo no necesita enviar
+ * paquete/derivados/payload: el servidor los ignora y recalcula).
+ */
+export function aEsquemaGemini(esquema: Esquema): Esquema {
+  const salida: Esquema = {};
+  const tipo = typeof esquema.type === 'string' && TIPOS.has(esquema.type) ? esquema.type : undefined;
+  if (tipo) salida.type = tipo.toUpperCase();
+  if (typeof esquema.description === 'string') salida.description = esquema.description;
+  if (Array.isArray(esquema.enum)) salida.enum = esquema.enum;
+  if (esquema.items && typeof esquema.items === 'object') salida.items = aEsquemaGemini(esquema.items as Esquema);
+  if (esquema.properties && typeof esquema.properties === 'object') {
+    const props: Record<string, Esquema> = {};
+    for (const [k, v] of Object.entries(esquema.properties as Record<string, Esquema>)) {
+      const libre = v.type === 'object' && !(v.properties && Object.keys(v.properties as object).length);
+      if (!libre) props[k] = aEsquemaGemini(v);
+    }
+    salida.properties = props;
+    const requeridos = (Array.isArray(esquema.required) ? (esquema.required as string[]) : []).filter((k) => k in props);
+    if (requeridos.length) salida.required = requeridos;
+  }
+  return salida;
+}
 
 const parteSchema = z
   .object({
@@ -18,13 +89,15 @@ type Contenido = { role: 'user' | 'model'; parts: unknown[] };
 const REINTENTABLES = new Set([429, 500, 502, 503, 504]);
 
 export class GeminiAdapter implements LlmAdapter {
-  readonly proveedor = 'google-gemini';
+  readonly proveedor: string;
   constructor(
     readonly modelo: string,
-    private readonly apiKey: string,
+    private readonly destino: Destino,
     private readonly timeoutMs: number,
     private readonly http: typeof fetch = globalThis.fetch,
-  ) {}
+  ) {
+    this.proveedor = destino.proveedor;
+  }
 
   private contenidos(mensajes: Mensaje[]): Contenido[] {
     const salida: Contenido[] = [];
@@ -56,19 +129,20 @@ export class GeminiAdapter implements LlmAdapter {
     const cuerpo = {
       systemInstruction: { parts: [{ text: mensajes.filter((m) => m.rol === 'system').map((m) => m.contenido).join('\n\n') }] },
       contents: this.contenidos(mensajes),
-      tools: [{ functionDeclarations: herramientas.map((h) => ({ name: h.name, description: h.description, parametersJsonSchema: h.parameters })) }],
+      tools: [{ functionDeclarations: herramientas.map((h) => ({ name: h.name, description: h.description, parameters: aEsquemaGemini(h.parameters) })) }],
       generationConfig: { temperature: 0.1 },
     };
     let respuesta: Response | undefined;
     for (let intento = 0; intento < 2; intento++) {
       try {
-        respuesta = await this.http(`https://generativelanguage.googleapis.com/v1beta/models/${this.modelo}:generateContent`, {
+        respuesta = await this.http(await this.destino.url(this.modelo), {
           method: 'POST',
-          headers: { 'x-goog-api-key': this.apiKey, 'Content-Type': 'application/json' },
+          headers: { ...(await this.destino.cabeceras()), 'Content-Type': 'application/json' },
           body: JSON.stringify(cuerpo),
           signal: AbortSignal.timeout(this.timeoutMs),
         });
       } catch (e) {
+        if (e instanceof LlmError) throw e;
         if (e instanceof Error && (e.name === 'TimeoutError' || e.name === 'AbortError')) {
           throw new LlmError(`El modelo no respondio en ${Math.round(this.timeoutMs / 1000)} s. Intenta de nuevo en un momento.`);
         }
@@ -79,7 +153,7 @@ export class GeminiAdapter implements LlmAdapter {
     }
     if (!respuesta || !respuesta.ok) {
       const estado = respuesta?.status ?? 0;
-      const causa = estado === 429 ? 'cuota agotada o demasiadas peticiones' : estado === 401 || estado === 403 ? 'clave o permisos del modelo invalidos' : estado === 404 ? 'modelo no disponible' : 'error del proveedor';
+      const causa = estado === 429 ? 'cuota agotada o demasiadas peticiones' : estado === 401 || estado === 403 ? this.destino.ayudaPermisos : estado === 404 ? 'modelo no disponible' : 'error del proveedor';
       throw new LlmError(`El proveedor del modelo respondio HTTP ${estado} (${causa}). No es un rechazo de la compra.`);
     }
     const parsed = respuestaSchema.safeParse(await respuesta.json());

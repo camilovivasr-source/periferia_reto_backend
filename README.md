@@ -13,7 +13,7 @@ npm test          # pruebas
 npm run dev       # API en http://localhost:8080 (sin GEMINI_API_KEY: modo práctica)
 ```
 
-Con modelo: `cp .env.example .env`, escribir `GEMINI_API_KEY` y `npm run check:gemini && npm run dev`. La clave solo vive en el entorno del servidor; nunca llega al front, a los logs ni a las respuestas.
+Con modelo por Vertex AI: `gcloud auth application-default login` y `AGENT_MODE=vertex GOOGLE_CLOUD_PROJECT=tu-proyecto npm run dev` (sin claves). Alternativa AI Studio: `AGENT_MODE=gemini GEMINI_API_KEY=… npm run dev`; la clave solo vive en el entorno del servidor.
 
 Chat completo en local: backend en `:8080` y, en el repo del frontend, `npm ci && npm start` (abre http://localhost:3000, `BACKEND_AUTH=none`).
 
@@ -22,8 +22,9 @@ Chat completo en local: backend en `:8080` y, en el repo del frontend, `npm ci &
 | Variable | Defecto | Uso |
 |---|---|---|
 | `PORT` | `8080` | Puerto HTTP. |
-| `AGENT_MODE` | `auto` | `auto`: Gemini si hay clave, si no modo práctica. `llm` exige clave. `practice` fuerza comandos sin LLM. |
-| `GEMINI_API_KEY` | — | Clave del modelo (Secret Manager en Cloud Run). |
+| `AGENT_MODE` | `auto` | `vertex` (Gemini por Vertex AI con ADC, sin clave; es el de Cloud Run), `gemini` (AI Studio, exige `GEMINI_API_KEY`), `practice` (comandos sin LLM). `auto`: vertex si `GEMINI_VERTEX=1`, gemini si hay clave, si no práctica. |
+| `GOOGLE_CLOUD_PROJECT`, `VERTEX_LOCATION` | — / `us-central1` | Proyecto y región de Vertex AI. |
+| `GEMINI_API_KEY` | — | Solo para `AGENT_MODE=gemini`. |
 | `GEMINI_MODEL` | `gemini-2.5-flash` | Modelo. |
 | `MAX_ITERACIONES` | `25` | Tope de llamadas modelo↔herramientas por turno. |
 | `MAX_TOKENS_SESION` | `300000` | Tope de tokens por sesión. |

@@ -39,11 +39,11 @@ Un cambio de reglas de negocio toca `src/domain/rules.ts`, nunca el servidor.
 **Sesiones**: en memoria (hasta 200, máx. 80 mensajes de contexto). Por eso el backend corre con `--max-instances 1`.
 
 ## 4. Elección del modelo
-- **Gemini 2.5 Flash** (`GEMINI_MODEL`), vía API REST `generateContent` con function calling nativo (parámetros como JSON Schema generado desde los esquemas zod). Motivos: función de herramientas fiable, latencia baja, costo bajo y la cuenta del proyecto ya es Google Cloud (el secreto vive en Secret Manager).
+- **Gemini 2.5 Flash por Vertex AI** (`AGENT_MODE=vertex`), vía `generateContent` con function calling nativo (esquemas derivados de zod y convertidos al subconjunto OpenAPI). Se autentica con la identidad de la cuenta de servicio del backend (`roles/aiplatform.user`, credenciales por defecto de la aplicación): **no hay clave de API que guardar ni filtrar**. Motivos: function calling fiable, latencia y costo bajos, y todo queda dentro del proyecto de Google Cloud. AI Studio con clave sigue disponible (`AGENT_MODE=gemini`).
 - Se conservan las partes nativas del modelo entre rondas (firmas de razonamiento) y los `id` de las llamadas.
 - **Costo estimado por caso** (supuesto, a verificar con la tarifa vigente): un caso procesa ~5 llamadas a herramientas y 4–6 rondas con ~6–10 mil tokens de contexto acumulado → del orden de 40–60 mil tokens de entrada y 2–4 mil de salida por caso. A tarifas de la familia Flash (centavos de dólar por millón de tokens) es del orden de **centésimas de dólar por caso**. `MAX_TOKENS_SESION` (300 000) y `MAX_ITERACIONES` limitan el gasto de una sesión.
 - Sin clave, el servidor arranca en **modo práctica** (un "modelo" determinista que traduce comandos a las mismas herramientas). Está etiquetado como tal en la UI; **no** reemplaza al agente LLM.
-- No verificado en este entorno: no tuve acceso a una clave real; el adaptador está probado con pruebas contra una respuesta simulada (`tests/modulo.test.ts`) y hay `npm run check:gemini` para validar la clave y el modelo antes de la defensa.
+- No verificado en este entorno: no hay credenciales de Google Cloud aquí; el adaptador (AI Studio y Vertex) está probado contra respuestas simuladas (`tests/modulo.test.ts`). `instalar.sh` prueba Vertex de verdad antes de desplegar y hace un chat real al final.
 
 ## 5. Matriz de controles
 Todos viven en `src/domain/rules.ts` (`validar`) y los usan chat, demo y `oc_crear` (que revalida siempre).

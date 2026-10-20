@@ -6,7 +6,7 @@ import { z } from 'zod';
 import { readConfig, type Config } from './config.js';
 import { Agente, cargarSistema, type EventoAgente } from './agent/loop.js';
 import { PracticaAdapter } from './agent/practice.js';
-import { GeminiAdapter } from './llm/gemini.js';
+import { GeminiAdapter, destinoAiStudio, destinoVertex } from './llm/gemini.js';
 import type { LlmAdapter } from './llm/adapter.js';
 import { entornoDe, listarCasos } from './domain/data.js';
 
@@ -26,7 +26,12 @@ async function leerJson(req: IncomingMessage): Promise<unknown> {
 }
 
 export async function crearAgente(config: Config): Promise<Agente> {
-  const llm: LlmAdapter = config.mode === 'llm' ? new GeminiAdapter(config.geminiModel, config.geminiApiKey!, config.llmTimeoutMs) : new PracticaAdapter();
+  const llm: LlmAdapter =
+    config.mode === 'vertex'
+      ? new GeminiAdapter(config.geminiModel, destinoVertex({ project: config.projectId, location: config.vertexLocation }), config.llmTimeoutMs)
+      : config.mode === 'gemini'
+        ? new GeminiAdapter(config.geminiModel, destinoAiStudio(config.geminiApiKey!), config.llmTimeoutMs)
+        : new PracticaAdapter();
   return new Agente({
     llm,
     directory: config.directory,
@@ -34,7 +39,7 @@ export async function crearAgente(config: Config): Promise<Agente> {
     maxIteraciones: config.maxIteraciones,
     maxTokensSesion: config.maxTokensSesion,
     actor: config.actor,
-    modo: config.mode === 'llm' ? 'LLM' : 'PRACTICA SIN LLM',
+    modo: config.mode === 'practice' ? 'PRACTICA SIN LLM' : 'LLM',
   });
 }
 

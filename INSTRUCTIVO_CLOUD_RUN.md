@@ -1,42 +1,21 @@
 # Despliegue en Cloud Run (URL pública del reto)
 
-Dos servicios: **backend** privado (IAM) y **frontend** público que le habla con la identidad de su servicio. Sin GitHub Actions ni WIF.
+Un solo script, en Cloud Shell. El LLM es **Gemini por Vertex AI** con la identidad del backend (sin clave de API).
 
-## Rápido: un solo script en Cloud Shell
 ```bash
 git clone -b claude/blissful-mendel-88agwr https://github.com/camilovivasr-source/periferia_reto_backend.git
-export PROJECT_ID='TU_PROYECTO' REGION='us-central1'
-bash periferia_reto_backend/infra/migrar.sh
+PROJECT_ID=tu-proyecto bash periferia_reto_backend/instalar.sh
 ```
-Pide la clave de Gemini (oculta) si el secreto aún no tiene versión, crea la infraestructura, despliega ambos servicios e imprime la URL del frontend. Es el flujo de los pasos siguientes, automatizado. Requiere proyecto con facturación y permisos para habilitar APIs y crear identidades.
+Repos privados: primero `gh auth login` (o deja las carpetas `periferia_reto_backend` y `periferia_reto_frontend` juntas y usa `FRONTEND_DIR`).
 
-## Manual, paso a paso
-Con `periferia_reto_backend` y `periferia_reto_frontend` en la misma carpeta:
-```bash
-export PROJECT_ID='TU_PROYECTO' REGION='us-central1'
-cd periferia_reto_backend
-bash infra/setup-manual.sh      # APIs, identidades, secreto gemini-api-key
-```
-La primera vez termina avisando que falta la clave. Regístrala sin dejarla en el historial y repite:
-```bash
-read -rsp 'Clave Gemini: ' K; printf '%s' "$K" | gcloud secrets versions add gemini-api-key --project "$PROJECT_ID" --data-file=-; unset K
-bash infra/setup-manual.sh
-bash infra/deploy-manual.sh     # backend (privado) -> permiso invoker al frontend -> frontend (público)
-```
-`deploy-manual.sh` comprueba `/health` y `/api/backend-health` e imprime la URL que se entrega en la defensa.
+Qué hace (idempotente; si falla, arreglas la causa y lo repites): comprueba cuenta/proyecto/facturación → activa APIs (incluye `aiplatform`) → crea cuentas de servicio (`backend` con `roles/aiplatform.user`) → prueba que el modelo responde en Vertex → despliega backend (privado por IAM, 1 instancia) y frontend (público) → verifica de punta a punta con un chat real y muestra la URL.
 
-## Qué hace cada pieza
+Variables: `PROJECT_ID`, `REGION`, `VERTEX_LOCATION` (us-central1), `GEMINI_MODEL` (gemini-2.5-flash), `RAMA`, `FRONTEND_DIR`, `BILLING_ACCOUNT`, `SOLO_INFRA=true`.
+
 | Servicio | Acceso | Configuración |
 |---|---|---|
-| `periferia-backend` | Privado (`--no-allow-unauthenticated`); solo `periferia-frontend` tiene `run.invoker` | `AGENT_MODE=llm`, `GEMINI_MODEL`, secreto `GEMINI_API_KEY`. **`--max-instances 1`**: sesiones en memoria y SAP simulado en archivos. |
-| `periferia-frontend` | Público | `BACKEND_URL`, `BACKEND_AUTH=iam` (ID token de su identidad). |
+| `periferia-backend` | Privado; solo la cuenta del frontend tiene `run.invoker` | `AGENT_MODE=vertex`, `GEMINI_MODEL`, `VERTEX_LOCATION`, `GOOGLE_CLOUD_PROJECT`. `--max-instances 1`: sesiones en memoria y SAP simulado en archivos. |
+| `periferia-frontend` | Público | `BACKEND_URL`, `BACKEND_AUTH=iam`. |
 
-## Comprobaciones antes de la defensa
-1. `curl $URL/api/backend-health` → `modo: "LLM"` (si dice `PRACTICA SIN LLM`, falta la clave o el secreto).
-2. Abrir la URL desde otra sesión: procesar `sol-001` (se crea), `sol-004` (pide confirmación; "confirmo" la crea), `sol-003` (bloqueada).
-3. Reiniciar el contenedor borra `out/` y las sesiones (documentado en SOLUCION.md); `sol-001` vuelve a crearse con el número 4500000001.
-
-## Problemas frecuentes
-- *Permisos al construir*: dar a `periferia-builder` los roles que pida el error (el script ya asigna `run.builder`, `logging.logWriter` y `artifactregistry.writer`); la propagación de IAM tarda unos minutos.
-- *502 en el frontend*: revisar `BACKEND_URL` y el `run.invoker` del backend.
-- *HTTP 429/403 del modelo*: cuota o clave; `npm run check:gemini` localmente.
+Problemas frecuentes: *403 de Vertex* → la API tarda 1-2 min o falta `roles/aiplatform.user`; *502 en el frontend* → `BACKEND_URL`/`run.invoker`; *allUsers bloqueado* → política de la organización.
+Local con Vertex: `gcloud auth application-default login` y `AGENT_MODE=vertex GOOGLE_CLOUD_PROJECT=… npm run dev`.
