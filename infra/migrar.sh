@@ -10,6 +10,13 @@ BRANCH=${BRANCH:-main}
 WORK=${WORK:-"$HOME/reto03"}
 command -v gcloud >/dev/null || { echo 'Ejecuta esto en Cloud Shell (falta gcloud).' >&2; exit 1; }
 
+# Autenticacion: Cloud Shell ya trae sesion; si no hay cuenta activa, se hace login por codigo.
+if [ -z "$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null)" ]; then
+  gcloud auth login --no-launch-browser
+fi
+gcloud auth application-default print-access-token >/dev/null 2>&1 || gcloud auth application-default login --no-launch-browser
+echo ">> Cuenta: $(gcloud auth list --filter=status:ACTIVE --format='value(account)')"
+
 PROJECT_ID=${PROJECT_ID:-$(gcloud config get-value project 2>/dev/null || true)}
 if [ -z "$PROJECT_ID" ]; then read -rp 'PROJECT_ID de GCP: ' PROJECT_ID; fi
 REGION=${REGION:-us-central1}
