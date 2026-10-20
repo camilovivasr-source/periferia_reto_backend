@@ -1,4 +1,4 @@
-import type { Paquete } from './types.js';
+import type { Paquete } from '../schemas.js';
 import { sha256 } from './util.js';
 
 /** Contenido que se hashea: encabezados + cuerpo del correo de aprobacion, tal como llego. */

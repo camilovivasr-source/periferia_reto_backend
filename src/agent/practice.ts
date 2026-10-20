@@ -1,90 +1,85 @@
-import type { LlmAdapter, LlamadaHerramienta, Mensaje, Respuesta } from '../llm/adapter.js';
-import { interpretarRespuesta } from './loop.js';
+import type { LlamadaHerramienta, LlmAdapter, Mensaje, Respuesta } from '../llm/adapter.js';
+import { interpretarRespuesta } from './confirmacion.js';
+import { redactar, type ResultadoTool } from './practice-texto.js';
+
+type Intencion = 'listar' | 'control' | 'procesar' | 'crear' | 'ayuda';
+
+const AYUDA = 'Modo practica (sin modelo). Escribe por ejemplo: **procesa sol-004**, y luego **confirmo** para crear la OC. Casos: sol-001 a sol-006.';
 
 /**
  * Modo practica: un "modelo" determinista que traduce comandos simples a llamadas de herramientas.
  * Pasa por el mismo ciclo, las mismas herramientas y la misma barrera de confirmacion que el modelo real.
- * No es un agente conversacional: sirve para verificar la integracion cuando no hay clave de modelo.
+ * No es un agente conversacional: sirve para verificar la integracion cuando no hay modelo disponible.
  */
 export class PracticaAdapter implements LlmAdapter {
   readonly proveedor = 'practica';
   readonly modelo = 'comandos-sin-llm';
 
   async enviar(mensajes: Mensaje[]): Promise<Respuesta> {
-    const ultimoUser = mensajes.map((m, i) => ({ m, i })).filter((x) => x.m.rol === 'user').at(-1)!;
-    const texto = (ultimoUser.m as { contenido: string }).contenido;
-    const turno = mensajes.slice(ultimoUser.i + 1);
-    const resultados = turno.filter((m): m is Extract<Mensaje, { rol: 'tool' }> => m.rol === 'tool').map((m) => ({ nombre: m.nombre, ...(JSON.parse(m.contenido) as { ok: boolean; data?: Record<string, unknown>; error?: string }) }));
-    const caso = this.caso(mensajes, ultimoUser.i);
-    const llama = (nombre: string, args: Record<string, unknown>, n: number): LlamadaHerramienta => ({ id: `p-${ultimoUser.i}-${n}`, nombre, args });
-    const respuesta = (contenido: string, llamadas?: LlamadaHerramienta[]): Respuesta => ({ mensaje: { rol: 'assistant', contenido, ...(llamadas ? { llamadas } : {}) }, tokens: 0 });
+    const indiceUsuario = mensajes.map((m) => m.rol).lastIndexOf('user');
+    const texto = (mensajes[indiceUsuario] as { contenido: string }).contenido;
+    const resultados = resultadosDelTurno(mensajes.slice(indiceUsuario + 1));
+    const caso = casoVigente(mensajes, indiceUsuario);
+    const llamada = (nombre: string, args: Record<string, unknown>, n: number): LlamadaHerramienta => ({ id: `p-${indiceUsuario}-${n}`, nombre, args });
+    const pide = (...llamadas: LlamadaHerramienta[]): Respuesta => ({ mensaje: { rol: 'assistant', contenido: '', llamadas }, tokens: 0 });
+    const dice = (contenido: string): Respuesta => ({ mensaje: { rol: 'assistant', contenido }, tokens: 0 });
 
-    const quiereCrear = caso !== null && interpretarRespuesta(texto) === 'confirma';
-    const soloValidar = /(no (la )?crees|sin crear|solo (valida|revisa|muestra))/i.test(texto);
+    if (resultados.length > 0) return this.siguientePaso(caso, texto, resultados, llamada, pide, dice);
 
-    if (resultados.length === 0 && /\b(casos|disponibles|lista\w*|panorama)\b/i.test(texto)) return respuesta('', [llama('oc_listar_casos', {}, 0)]);
-    if (resultados.length === 0 && /\b(resumen|control|retroactiv\w*)\b/i.test(texto)) return respuesta('', [llama('oc_resumen_control', {}, 0)]);
-    if (resultados.length === 1 && resultados[0].nombre === 'oc_listar_casos') {
-      const filas = (resultados[0].data as unknown as Array<{ caso: string; proveedor: string; valor_total: number; estado: string; numero_oc: string | null }>).map((c) => `| ${c.caso} | ${c.proveedor} | ${c.valor_total.toLocaleString('es-CO')} | ${c.estado}${c.numero_oc ? ` (OC ${c.numero_oc})` : ''} |`);
-      return respuesta(['Casos disponibles (modo practica):', '', '| Caso | Proveedor | Valor | Estado |', '|---|---|---|---|', ...filas].join('\n'));
+    switch (entender(texto, caso)) {
+      case 'listar': return pide(llamada('oc_listar_casos', {}, 0));
+      case 'control': return pide(llamada('oc_resumen_control', {}, 0));
+      case 'crear': return pide(llamada('oc_crear', { caso, confirmado: true }, 0));
+      case 'procesar': return pide(llamada('oc_leer_paquete', { caso }, 0), llamada('oc_validar', { caso }, 1));
+      default: return dice(AYUDA);
     }
-    if (resultados.length === 1 && resultados[0].nombre === 'oc_resumen_control') {
-      const d = resultados[0].data as unknown as { intentos: number; oc_creadas: unknown[]; porcentaje_retroactivas: number };
-      return respuesta(`Control: ${d.intentos} intento(s), ${d.oc_creadas.length} OC creada(s), ${d.porcentaje_retroactivas} % retroactivas.`);
-    }
-    if (!caso) return respuesta('Modo practica (sin modelo). Escribe por ejemplo: **procesa sol-004**, y luego **confirmo** para crear la OC. Casos: sol-001 a sol-006.');
-    if (resultados.length === 0) {
-      if (quiereCrear && !/\b(procesa|valida|revisa)\w*/i.test(texto)) return respuesta('', [llama('oc_crear', { caso, confirmado: true }, 0)]);
-      return respuesta('', [llama('oc_leer_paquete', { caso }, 0), llama('oc_validar', { caso }, 1)]);
-    }
-    const validar = resultados.find((r) => r.nombre === 'oc_validar');
-    const crear = resultados.find((r) => r.nombre === 'oc_crear');
-    const construir = resultados.find((r) => r.nombre === 'oc_construir_payload');
-    if (validar?.ok && (validar.data as { apta: boolean }).apta && !construir && !crear) {
-      return respuesta('', [llama('oc_construir_payload', { caso }, 2), llama('oc_generar_evidencia', { caso }, 3)]);
-    }
-    const confirmaciones = ((validar?.data as { confirmaciones?: unknown[] } | undefined)?.confirmaciones ?? []).length;
-    if (construir && !crear && !confirmaciones && !soloValidar) return respuesta('', [llama('oc_crear', { caso }, 4)]);
-    return respuesta(this.redactar(caso, resultados, texto));
   }
 
-  private caso(mensajes: Mensaje[], hasta: number): string | null {
-    for (let i = hasta; i >= 0; i--) {
-      const m = mensajes[i];
-      if (m.rol === 'user') {
-        const c = /sol-\d{3}/i.exec(m.contenido);
-        if (c) return c[0].toLowerCase();
-      }
-    }
-    return null;
-  }
+  /** Decide, segun los resultados ya obtenidos en este turno, que herramienta sigue o cuando redactar la respuesta. */
+  private siguientePaso(
+    caso: string | null,
+    texto: string,
+    resultados: ResultadoTool[],
+    llamada: (n: string, a: Record<string, unknown>, i: number) => LlamadaHerramienta,
+    pide: (...l: LlamadaHerramienta[]) => Respuesta,
+    dice: (c: string) => Respuesta,
+  ): Respuesta {
+    const de = (nombre: string) => resultados.find((r) => r.nombre === nombre);
+    const validar = de('oc_validar');
+    const validacion = validar?.ok ? (validar.data as { apta: boolean; confirmaciones: unknown[] }) : null;
 
-  private redactar(caso: string, rs: Array<{ nombre: string; ok: boolean; data?: Record<string, unknown>; error?: string }>, _texto: string): string {
-    const por = (n: string) => rs.find((r) => r.nombre === n);
-    const L: string[] = [`**${caso}** (modo practica)`];
-    const paquete = por('oc_leer_paquete');
-    if (paquete && !paquete.ok) return `No pude leer el paquete: ${paquete.error}`;
-    const v = por('oc_validar');
-    const hallazgos = (xs: unknown) => (xs as Array<{ codigo: string; detalle: string }> | undefined ?? []).map((x) => `- **${x.codigo}**: ${x.detalle}`);
-    if (v?.ok) {
-      const d = v.data as { apta: boolean; bloqueos: unknown[]; confirmaciones: unknown[]; retroactiva: boolean };
-      L.push(d.apta ? 'Resultado: **apta** para crear.' : 'Resultado: **no apta**. No se crea la OC.');
-      if (d.bloqueos.length) L.push('Bloqueos:', ...hallazgos(d.bloqueos));
-      if (d.confirmaciones.length) L.push('Confirmaciones requeridas:', ...hallazgos(d.confirmaciones));
-      if (d.retroactiva) L.push('Marcada como **retroactiva** en el control.');
-    } else if (v) L.push(`Validacion: ${v.error}`);
-    const p = por('oc_construir_payload');
-    if (p?.ok) {
-      const pl = p.data!.payload as { proveedor: { nombre: string; codigo_sap: string }; moneda: string; condiciones_pago: string; totales: { total: number }; posiciones: Array<{ descripcion: string; cantidad: number; unidad: string; centro_costo: string; subarea: string; indicador_iva: string }> };
-      const pos = pl.posiciones[0];
-      L.push('', '| Campo | Valor |', '|---|---|', `| Proveedor | ${pl.proveedor.nombre} (${pl.proveedor.codigo_sap}) |`, `| Posicion 10 | ${pos.descripcion} · ${pos.cantidad} ${pos.unidad} |`, `| Centro / subarea | ${pos.centro_costo} / ${pos.subarea} |`, `| IVA / pago | ${pos.indicador_iva} / ${pl.condiciones_pago} |`, `| Total | ${pl.moneda} ${pl.totales.total.toLocaleString('es-CO')} |`);
+    if (validacion?.apta && !de('oc_construir_payload') && !de('oc_crear')) {
+      return pide(llamada('oc_construir_payload', { caso }, 2), llamada('oc_generar_evidencia', { caso }, 3));
     }
-    const c = por('oc_crear');
-    if (c?.ok) L.push('', `**OC ${String(c.data!.numero_oc)}** ${c.data!.idempotente ? 'ya existia (idempotente)' : 'creada'}.`);
-    else if (c) L.push('', `No se creo la OC: ${c.error}`);
-    else if (v?.ok && (v.data as { apta: boolean; confirmaciones: unknown[] }).apta && (v.data as { confirmaciones: unknown[] }).confirmaciones.length) {
-      L.push('', '¿Confirmas que cree la OC con estas excepciones? Responde **confirmo** para continuar.');
+    const soloRevisar = /(no (la )?crees|sin crear|solo (valida|revisa|muestra))/i.test(texto);
+    if (de('oc_construir_payload') && !de('oc_crear') && !validacion?.confirmaciones.length && !soloRevisar) {
+      return pide(llamada('oc_crear', { caso }, 4));
     }
-    return L.join('\n');
+    return dice(redactar(caso, resultados));
   }
+}
+
+function resultadosDelTurno(mensajes: Mensaje[]): ResultadoTool[] {
+  return mensajes
+    .filter((m): m is Extract<Mensaje, { rol: 'tool' }> => m.rol === 'tool')
+    .map((m) => ({ nombre: m.nombre, ...(JSON.parse(m.contenido) as Omit<ResultadoTool, 'nombre'>) }));
+}
+
+/** El caso que se nombro en el mensaje actual o, si no, en el ultimo mensaje del usuario que lo nombro. */
+function casoVigente(mensajes: Mensaje[], desde: number): string | null {
+  for (let i = desde; i >= 0; i--) {
+    const m = mensajes[i];
+    const caso = m.rol === 'user' ? /sol-\d{3}/i.exec(m.contenido) : null;
+    if (caso) return caso[0].toLowerCase();
+  }
+  return null;
+}
+
+function entender(texto: string, caso: string | null): Intencion {
+  if (/\b(casos|disponibles|lista\w*|panorama)\b/i.test(texto)) return 'listar';
+  if (/\b(resumen|control|retroactiv\w*)\b/i.test(texto)) return 'control';
+  if (!caso) return 'ayuda';
+  const procesa = /\b(procesa|valida|revisa)\w*/i.test(texto);
+  if (!procesa && interpretarRespuesta(texto) === 'confirma') return 'crear';
+  return 'procesar';
 }

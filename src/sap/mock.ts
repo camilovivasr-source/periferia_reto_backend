@@ -1,9 +1,9 @@
 import { appendFile, mkdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import type { SapAdapter } from './adapter.js';
-import type { OrdenCompra } from '../domain/types.js';
+import type { OrdenCompra } from '../schemas.js';
 import { normalizarNit } from '../domain/util.js';
-import { cargarMaestros, type Entorno } from '../domain/data.js';
+import { cargarMaestros, type Entorno } from '../data.js';
 
 const PRIMERA_OC = 4_500_000_001;
 const colas = new Map<string, Promise<unknown>>();

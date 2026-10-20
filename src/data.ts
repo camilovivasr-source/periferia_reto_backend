@@ -11,9 +11,9 @@ import {
   SolicitudSchema,
   type Maestros,
   type Paquete,
-} from './types.js';
-import { esAprobacion, parsearCotizacion, parsearFactura } from './parse.js';
-import { soloFecha } from './util.js';
+} from './schemas.js';
+import { esAprobacion, parsearCotizacion, parsearFactura } from './domain/parse.js';
+import { soloFecha } from './domain/util.js';
 
 /** Error de datos de entrada: se devuelve como { ok:false, error }, nunca como rechazo de negocio. */
 export class DatosError extends Error {}

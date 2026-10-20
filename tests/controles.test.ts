@@ -3,8 +3,8 @@ import { before, describe, it } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { ejecutor, humanoSimulado, usarOutTemporal } from './helpers.js';
-import type { Validacion } from '../src/domain/types.js';
-import { OrdenCompraSchema } from '../src/domain/types.js';
+import type { Validacion } from '../src/schemas.js';
+import { OrdenCompraSchema } from '../src/schemas.js';
 
 let out: string;
 before(async () => {

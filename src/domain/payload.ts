@@ -1,6 +1,6 @@
-import { OrdenCompraSchema, type Maestros, type OrdenCompra, type Paquete, type Trazabilidad, type Validacion } from './types.js';
-import { resolverProveedor } from './rules.js';
-import { fechaLocal } from './data.js';
+import { OrdenCompraSchema, type Maestros, type OrdenCompra, type Paquete, type Trazabilidad, type Validacion } from '../schemas.js';
+import { resolverProveedor } from './validate.js';
+import { fechaLocal } from '../data.js';
 import { hashEvidencia } from './evidence.js';
 import { jsonEstable, redondear, sha256 } from './util.js';
 

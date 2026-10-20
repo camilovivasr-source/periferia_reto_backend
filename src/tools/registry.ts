@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import * as oc from './oc.js';
 import type { ToolContext, ToolDef } from './types.js';
-import { entornoDe } from '../domain/data.js';
+import { entornoDe } from '../data.js';
 import { registrarLlamada } from '../out.js';
 import { resumir } from './resumen.js';
 

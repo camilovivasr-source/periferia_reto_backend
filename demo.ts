@@ -4,10 +4,10 @@
  */
 import { rm, readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { entornoDe, listarCasos } from './src/domain/data.js';
+import { entornoDe, listarCasos } from './src/data.js';
 import { ejecutarHerramienta, type ResultadoHerramienta } from './src/tools/registry.js';
 import type { ConfirmacionPuerto, ToolContext } from './src/tools/types.js';
-import type { Hallazgo } from './src/domain/types.js';
+import type { Hallazgo } from './src/schemas.js';
 
 const directory = process.cwd();
 const env = entornoDe(directory);

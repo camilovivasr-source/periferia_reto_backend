@@ -3,7 +3,8 @@ import { after, before, describe, it } from 'node:test';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { readConfig } from '../src/config.js';
-import { crearAgente, crearManejador } from '../src/server.js';
+import { crearAgente } from '../src/bootstrap.js';
+import { crearManejador } from '../src/http/rutas.js';
 import { usarOutTemporal } from './helpers.js';
 
 let server: Server;

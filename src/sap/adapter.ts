@@ -1,4 +1,4 @@
-import type { OrdenCompra } from '../domain/types.js';
+import type { OrdenCompra } from '../schemas.js';
 
 /** Puerto hacia SAP. El dominio sabe si la compra cumple; el adaptador sabe como hablar con SAP. */
 export interface SapAdapter {

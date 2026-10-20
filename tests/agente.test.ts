@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { before, describe, it } from 'node:test';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { Agente, cargarSistema, interpretarRespuesta } from '../src/agent/loop.js';
+import { Agente } from '../src/agent/loop.js';
+import { interpretarRespuesta } from '../src/agent/confirmacion.js';
+import { cargarSistema } from '../src/agent/prompt.js';
 import { PracticaAdapter } from '../src/agent/practice.js';
 import { LlmError, type LlmAdapter, type Mensaje, type Respuesta } from '../src/llm/adapter.js';
 import { definiciones } from '../src/tools/registry.js';
@@ -179,8 +181,8 @@ describe('Conversacion: consultas, sugerencias y panorama', () => {
   });
 
   it('el resumen de control mide el porcentaje de retroactivas', async () => {
-    const { resumenControl } = await import('../src/domain/casos.js');
-    const { entornoDe } = await import('../src/domain/data.js');
+    const { resumenControl } = await import('../src/application/consultas.js');
+    const { entornoDe } = await import('../src/data.js');
     const a = await agente(new PracticaAdapter());
     await a.turno('sesion-0011', 'procesa sol-005');
     await a.turno('sesion-0011', 'confirmo');

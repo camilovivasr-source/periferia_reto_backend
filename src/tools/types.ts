@@ -1,25 +1,10 @@
 import type { z } from 'zod';
-import type { Hallazgo } from '../domain/types.js';
+import type { Invocacion } from '../application/tipos.js';
 
-/**
- * Puerto de confirmacion humana. Lo implementa quien conduce la conversacion (servidor o demo),
- * nunca el modelo: asi un `confirmado: true` escrito por el modelo no concede nada por si solo.
- */
-export interface ConfirmacionPuerto {
-  /** Deja constancia de que se pidio confirmar `huella` para `caso` (el front la resalta). */
-  registrar(caso: string, huella: string, confirmaciones: Hallazgo[]): void;
-  /** El humano confirmo, en su ultimo mensaje, exactamente esta huella. */
-  concedida(caso: string, huella: string): boolean;
-  /** La confirmacion se consume al crear. */
-  consumir(caso: string): void;
-}
+export type { ConfirmacionPuerto } from '../application/tipos.js';
 
-export type ToolContext = {
-  directory: string;
-  sessionId: string;
-  actor?: string;
-  confirmacion?: ConfirmacionPuerto;
-};
+/** Contexto de una llamada a herramienta: quien invoca (PRD 6.2) mas la sesion para el registro. */
+export type ToolContext = Invocacion & { sessionId: string };
 
 export type ToolDef<S extends z.ZodRawShape> = {
   description: string;

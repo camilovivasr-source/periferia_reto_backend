@@ -20,11 +20,11 @@ La analista administrativa digita a mano, por cada factura, proveedor, centro de
 |---|---|---|
 | **Comportamiento** (rol, flujo, tono, reglas de conversación) | `agent/prompt.md` | Se cambia sin tocar código. |
 | **Conocimiento** (proceso, matriz de controles, glosario, retroactivas) | `src/knowledge/ordenes-compra.md` | Se concatena al system prompt; el módulo reutilizable lo publica como skill. |
-| **Ejecución** (leer, validar, construir, evidenciar, crear) | `src/tools/oc.ts` + `src/domain/*` | Sin HTTP ni LLM: el chat, el demo y las pruebas llaman lo mismo. |
+| **Ejecución** (leer, validar, construir, evidenciar, crear) | `src/tools/oc.ts` (contratos) → `src/application/` (casos de uso) → `src/domain/` (reglas) | Sin HTTP ni LLM: el chat, el demo y las pruebas llaman lo mismo. |
 | **Proveedor LLM** | `src/llm/adapter.ts` (`LlmAdapter.enviar(mensajes, herramientas)`) + `gemini.ts` | Cambiar de proveedor no toca el ciclo. |
 | **SAP** | `src/sap/adapter.ts` (`SapAdapter`) + `mock.ts` | El dominio no sabe de ERP; el mock escribe en `out/sap/`. |
 
-Un cambio de reglas de negocio toca `src/domain/rules.ts`, nunca el servidor.
+Un cambio de reglas de negocio toca `src/domain/controls/*`, nunca el servidor.
 
 ## 3. Ciclo del agente
 `Agente.turno(sessionId, mensaje)` (`src/agent/loop.ts`):
@@ -46,7 +46,7 @@ Un cambio de reglas de negocio toca `src/domain/rules.ts`, nunca el servidor.
 - No verificado en este entorno: no hay credenciales de Google Cloud aquí; el adaptador (AI Studio y Vertex) está probado contra respuestas simuladas (`tests/modulo.test.ts`). `instalar.sh` prueba Vertex de verdad antes de desplegar y hace un chat real al final.
 
 ## 5. Matriz de controles
-Todos viven en `src/domain/rules.ts` (`validar`) y los usan chat, demo y `oc_crear` (que revalida siempre).
+Cada control es una regla pura en `src/domain/controls/` (proveedor, autorizacion, imputacion, documentos, impuestos, aritmetica); `src/domain/validate.ts` (`validar`) las compone en orden. Las usan chat, demo y `oc_crear` (que revalida siempre).
 | # | Regla | Implementación | Tipo |
 |---|---|---|---|
 | RC1 | Proveedor existe y activo | Por NIT normalizado (sin puntos ni dígito de verificación); sin NIT, por nombre normalizado (sin tildes/puntuación) | Bloqueo |

@@ -1,5 +1,5 @@
 import { normalizarNit, parsearMonto, sumarDias } from './util.js';
-import type { Paquete } from './types.js';
+import type { Paquete } from '../schemas.js';
 
 type Cotizacion = NonNullable<Paquete['cotizacion']>;
 type Factura = NonNullable<Paquete['factura']>;

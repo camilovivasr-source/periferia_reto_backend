@@ -40,14 +40,27 @@ Chat completo en local: backend en `:8080` y, en el repo del frontend, `npm ci &
 | `GET` | `/api/health` | `{ ok, proveedor, modelo, modo }`, sin claves. |
 | `GET` | `/api/casos` | Casos disponibles. |
 
-## Estructura
+## Estructura (capas, de afuera hacia adentro)
 
 ```
-agent/prompt.md            comportamiento     src/tools/oc.ts      herramientas oc_* (zod)
-src/knowledge/*.md         conocimiento       src/domain/          reglas, payload, evidencia
-src/agent/loop.ts          ciclo y sesiones   src/sap/             SapAdapter + mock
-src/llm/                   LlmAdapter+Gemini  modulo/              agente empaquetado (bonus)
-demo.ts                    6 casos sin modelo fixtures/            insumos (no modificar)
+agent/prompt.md              comportamiento del agente (system prompt)
+src/knowledge/*.md           conocimiento del proceso (se agrega al prompt; skill del módulo)
+src/server.ts                arranque HTTP            src/bootstrap.ts   composición (elige el LLM)
+src/http/                    rutas, SSE, descargas    src/config.ts      variables de entorno
+src/agent/                   ciclo del agente: loop, sesiones, confirmacion, sugerencias, modo práctica
+src/llm/                     LlmAdapter + Gemini (Vertex AI / AI Studio)
+src/tools/oc.ts              herramientas oc_* (contrato + zod); registry.ts las publica al modelo
+src/application/             casos de uso: ordenes (leer/validar/construir/evidencia/crear), consultas
+src/domain/validate.ts       compone los controles   src/domain/controls/   RC1-RC11, una regla por función
+src/domain/{payload,evidence,parse,util}.ts          OC, evidencia sha256/PDF, lectura de cotización
+src/schemas.ts               contratos zod (fixtures, paquete, OrdenCompra)
+src/data.ts                  lectura de maestros y paquetes (errores de datos tipados)
+src/sap/                     SapAdapter + mock sobre archivos
+src/out.ts                   control.csv y log.jsonl
+demo.ts  tests/  modulo/     verificación sin modelo, pruebas, agente empaquetado (bonus)
+fixtures/reto-03/            insumos (no modificar)       docs/   PRD y guía de estudio
 ```
+
+Regla de dependencias: `http → agent → tools → application → domain → schemas`; el dominio no conoce HTTP, LLM ni archivos de salida.
 
 `npm run modulo` regenera `modulo/` a partir de las mismas fuentes (una prueba falla si quedan desactualizadas).

@@ -1,7 +1,8 @@
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
-import { cargarMaestros, leerPaquete, listarCasos, type Entorno } from './data.js';
-import { validar } from './rules.js';
+import { cargarMaestros, leerPaquete, listarCasos, type Entorno } from '../data.js';
+import { validar } from '../domain/validate.js';
+import { normalizarTexto } from '../domain/util.js';
 import { SapMock } from '../sap/mock.js';
 
 export type EstadoCaso = 'CREADA' | 'BLOQUEADA' | 'REQUIERE_CONFIRMACION' | 'APTA' | 'ERROR_DATOS';
@@ -85,4 +86,16 @@ export async function resumenControl(env: Entorno) {
     porcentaje_retroactivas: creadas.size ? Math.round((retro.length / creadas.size) * 100) : 0,
     ruta: 'out/control.csv',
   };
+}
+
+export const MAESTROS = ['proveedores', 'centros_costo', 'indicadores_iva', 'condiciones_pago'] as const;
+export type NombreMaestro = (typeof MAESTROS)[number];
+
+/** Consulta de solo lectura a un maestro, con filtro de texto opcional (maximo 20 filas). */
+export async function consultarMaestro(env: Entorno, maestro: NombreMaestro, buscar?: string) {
+  const m = await cargarMaestros(env);
+  const filas: unknown[] = { proveedores: m.proveedores, centros_costo: m.centros, indicadores_iva: m.indicadoresIva, condiciones_pago: m.condicionesPago }[maestro];
+  const q = buscar ? normalizarTexto(buscar) : '';
+  const hallados = q ? filas.filter((f) => normalizarTexto(JSON.stringify(f)).includes(q)) : filas;
+  return { maestro, total: hallados.length, filas: hallados.slice(0, 20) };
 }
