@@ -89,6 +89,8 @@ dar_rol() { local i; for i in 1 2 3 4; do corre gcloud projects add-iam-policy-b
             avisa "no se pudo dar $2 a $1"; return 1; }
 dar_rol "serviceAccount:${SA_BUILD}" roles/run.builder
 dar_rol "serviceAccount:${SA_BUILD}" roles/logging.logWriter
+dar_rol "serviceAccount:${SA_BUILD}" roles/artifactregistry.writer
+dar_rol "serviceAccount:${SA_BUILD}" roles/storage.objectViewer
 dar_rol "serviceAccount:${SA_BACK}"  roles/aiplatform.user     # llamar a Gemini en Vertex AI
 dar_rol "serviceAccount:${SA_BACK}"  roles/logging.logWriter
 dar_rol "serviceAccount:${SA_FRONT}" roles/logging.logWriter
