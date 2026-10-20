@@ -8,6 +8,8 @@ import { contenidoEvidencia, generarPdf, hashEvidencia } from '../domain/evidenc
 import { SapMock } from '../sap/mock.js';
 import { escribirArchivo, registrarControl } from '../out.js';
 import type { OrdenCompra } from '../domain/types.js';
+import { resumenCasos, resumenControl } from '../domain/casos.js';
+import { normalizarTexto } from '../domain/util.js';
 
 /**
  * Herramientas del agente (PRD 6.2). Cada export se publica como `oc_<export>`.
@@ -146,4 +148,35 @@ export const crear: ToolDef<{ caso: typeof caso; payload: z.ZodOptional<z.ZodRec
       await registrarControl(env.outDir, { ...fila, resultado: 'CREADA', numero_oc });
       return ok({ numero_oc, fecha, idempotente: false, retroactiva: validacion.retroactiva, evidencia: rel(ctx, path.join(env.outDir, args.caso, 'aprobacion.txt')) });
     }),
+};
+
+// ── Herramientas de consulta (solo lectura): permiten responder preguntas sin inventar datos ──
+
+export const listar_casos: ToolDef<Record<string, never>> = {
+  description: 'Lista todas las solicitudes disponibles con su estado actual (apta, requiere confirmacion, bloqueada, creada), proveedor, valor y numero de OC si existe. Usar cuando el usuario no indica una solicitud o pide un panorama general.',
+  args: {},
+  execute: (_args, ctx) => seguro(async () => ok(await resumenCasos(entornoDe(ctx.directory)))),
+};
+
+const MAESTROS = ['proveedores', 'centros_costo', 'indicadores_iva', 'condiciones_pago'] as const;
+export const consultar_maestro: ToolDef<{ maestro: z.ZodEnum<['proveedores', 'centros_costo', 'indicadores_iva', 'condiciones_pago']>; buscar: z.ZodOptional<z.ZodString> }> = {
+  description: 'Consulta un maestro de referencia (proveedores, centros de costo con subareas y aprobadores con tope, indicadores de IVA, condiciones de pago). Usar para responder preguntas como "quien puede aprobar en CC-2020" o "que condicion de pago es Z030".',
+  args: {
+    maestro: z.enum(MAESTROS).describe('Cual maestro consultar'),
+    buscar: z.string().max(80).optional().describe('Texto opcional para filtrar (nombre, NIT, codigo, email)'),
+  },
+  execute: (args, ctx) =>
+    seguro(async () => {
+      const m = await cargarMaestros(entornoDe(ctx.directory));
+      const filas: unknown[] = { proveedores: m.proveedores, centros_costo: m.centros, indicadores_iva: m.indicadoresIva, condiciones_pago: m.condicionesPago }[args.maestro];
+      const q = args.buscar ? normalizarTexto(args.buscar) : '';
+      const hallados = q ? filas.filter((f) => normalizarTexto(JSON.stringify(f)).includes(q)) : filas;
+      return ok({ maestro: args.maestro, total: hallados.length, filas: hallados.slice(0, 20) });
+    }),
+};
+
+export const resumen_control: ToolDef<Record<string, never>> = {
+  description: 'Resume el registro de control (out/control.csv): intentos por resultado, OC creadas y porcentaje de OC retroactivas. Usar para preguntas de medicion, auditoria o "que se ha hecho hasta ahora".',
+  args: {},
+  execute: (_args, ctx) => seguro(async () => ok(await resumenControl(entornoDe(ctx.directory)))),
 };

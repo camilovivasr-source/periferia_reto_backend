@@ -22,6 +22,16 @@ export class PracticaAdapter implements LlmAdapter {
     const quiereCrear = caso !== null && interpretarRespuesta(texto) === 'confirma';
     const soloValidar = /(no (la )?crees|sin crear|solo (valida|revisa|muestra))/i.test(texto);
 
+    if (resultados.length === 0 && /\b(casos|disponibles|lista\w*|panorama)\b/i.test(texto)) return respuesta('', [llama('oc_listar_casos', {}, 0)]);
+    if (resultados.length === 0 && /\b(resumen|control|retroactiv\w*)\b/i.test(texto)) return respuesta('', [llama('oc_resumen_control', {}, 0)]);
+    if (resultados.length === 1 && resultados[0].nombre === 'oc_listar_casos') {
+      const filas = (resultados[0].data as unknown as Array<{ caso: string; proveedor: string; valor_total: number; estado: string; numero_oc: string | null }>).map((c) => `| ${c.caso} | ${c.proveedor} | ${c.valor_total.toLocaleString('es-CO')} | ${c.estado}${c.numero_oc ? ` (OC ${c.numero_oc})` : ''} |`);
+      return respuesta(['Casos disponibles (modo practica):', '', '| Caso | Proveedor | Valor | Estado |', '|---|---|---|---|', ...filas].join('\n'));
+    }
+    if (resultados.length === 1 && resultados[0].nombre === 'oc_resumen_control') {
+      const d = resultados[0].data as unknown as { intentos: number; oc_creadas: unknown[]; porcentaje_retroactivas: number };
+      return respuesta(`Control: ${d.intentos} intento(s), ${d.oc_creadas.length} OC creada(s), ${d.porcentaje_retroactivas} % retroactivas.`);
+    }
     if (!caso) return respuesta('Modo practica (sin modelo). Escribe por ejemplo: **procesa sol-004**, y luego **confirmo** para crear la OC. Casos: sol-001 a sol-006.');
     if (resultados.length === 0) {
       if (quiereCrear && !/\b(procesa|valida|revisa)\w*/i.test(texto)) return respuesta('', [llama('oc_crear', { caso, confirmado: true }, 0)]);

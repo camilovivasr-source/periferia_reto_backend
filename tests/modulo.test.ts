@@ -34,7 +34,9 @@ describe('Adaptador Gemini (sin red)', () => {
     const r1 = await g.enviar([{ rol: 'system', contenido: 'sistema' }, { rol: 'user', contenido: 'valida sol-001' }], definiciones());
     assert.equal(r1.tokens, 42);
     assert.deepEqual(r1.mensaje.llamadas, [{ id: 'f1', nombre: 'oc_validar', args: { caso: 'sol-001' } }]);
-    assert.equal(cuerpos[0].tools[0].functionDeclarations.length, 5);
+    assert.equal(cuerpos[0].tools[0].functionDeclarations.length, 8);
+    const sinArgs = cuerpos[0].tools[0].functionDeclarations.find((f: any) => f.name === "oc_listar_casos");
+    assert.equal("parameters" in sinArgs, false, "sin argumentos no se envia parameters (Vertex lo rechaza)");
     const validar = cuerpos[0].tools[0].functionDeclarations.find((f: any) => f.name === 'oc_validar');
     assert.equal(validar.parameters.type, 'OBJECT');
     assert.equal(validar.parameters.properties.caso.type, 'STRING');

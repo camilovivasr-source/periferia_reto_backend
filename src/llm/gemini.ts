@@ -99,6 +99,13 @@ export class GeminiAdapter implements LlmAdapter {
     this.proveedor = destino.proveedor;
   }
 
+  /** Sin argumentos no se envia `parameters`: Vertex rechaza OBJECT sin propiedades. */
+  private declaracion(h: HerramientaDef) {
+    const parameters = aEsquemaGemini(h.parameters);
+    const hay = parameters.properties && Object.keys(parameters.properties as object).length > 0;
+    return { name: h.name, description: h.description, ...(hay ? { parameters } : {}) };
+  }
+
   private contenidos(mensajes: Mensaje[]): Contenido[] {
     const salida: Contenido[] = [];
     const idsNativos = new Map<string, string | undefined>();
@@ -129,7 +136,7 @@ export class GeminiAdapter implements LlmAdapter {
     const cuerpo = {
       systemInstruction: { parts: [{ text: mensajes.filter((m) => m.rol === 'system').map((m) => m.contenido).join('\n\n') }] },
       contents: this.contenidos(mensajes),
-      tools: [{ functionDeclarations: herramientas.map((h) => ({ name: h.name, description: h.description, parameters: aEsquemaGemini(h.parameters) })) }],
+      tools: [{ functionDeclarations: herramientas.map((h) => this.declaracion(h)) }],
       generationConfig: { temperature: 0.1 },
     };
     let respuesta: Response | undefined;

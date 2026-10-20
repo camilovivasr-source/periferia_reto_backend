@@ -11,7 +11,7 @@ export type HerramientaDef = { name: string; description: string; parameters: Re
 type Registrada = { name: string; description: string; schema: z.ZodObject<z.ZodRawShape>; execute: (args: never, ctx: ToolContext) => Promise<string> };
 
 /** El nombre que ve el modelo es <archivo>_<export>: oc_leer_paquete, oc_validar, ... */
-const ORDEN = ['leer_paquete', 'validar', 'construir_payload', 'generar_evidencia', 'crear'];
+const ORDEN = ['leer_paquete', 'validar', 'construir_payload', 'generar_evidencia', 'crear', 'listar_casos', 'consultar_maestro', 'resumen_control'];
 const orden = (n: string) => (ORDEN.includes(n) ? ORDEN.indexOf(n) : ORDEN.length);
 
 const registro: Registrada[] = Object.entries(oc as Record<string, ToolDef<z.ZodRawShape>>)

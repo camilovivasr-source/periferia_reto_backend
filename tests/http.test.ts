@@ -31,6 +31,19 @@ describe('API HTTP', () => {
   it('lista de casos', async () => {
     const r = await (await fetch(base + '/api/casos')).json();
     assert.deepEqual(r.casos, ['sol-001', 'sol-002', 'sol-003', 'sol-004', 'sol-005', 'sol-006']);
+    const estados = Object.fromEntries(r.detalle.map((c: { caso: string; estado: string }) => [c.caso, c.estado]));
+    assert.equal(estados['sol-002'], 'BLOQUEADA');
+    assert.equal(estados['sol-004'], 'REQUIERE_CONFIRMACION');
+  });
+
+  it('descarga de evidencia solo con nombres permitidos', async () => {
+    await post('/api/chat', { sessionId: 'http-sesion-9', message: 'procesa sol-004' });
+    const pdf = await fetch(base + '/api/archivos/sol-004/aprobacion.pdf');
+    assert.equal(pdf.status, 200);
+    assert.equal(pdf.headers.get('content-type'), 'application/pdf');
+    assert.equal((await fetch(base + '/api/archivos/sol-004/secreto.txt')).status, 404);
+    assert.equal((await fetch(base + '/api/archivos/..%2F..%2Fetc/passwd')).status, 404);
+    assert.equal((await fetch(base + '/api/archivos/sol-001/aprobacion.pdf')).status, 404, 'aun no generado');
   });
 
   it('chat: respuesta, llamadas a herramientas y confirmacion pendiente', async () => {

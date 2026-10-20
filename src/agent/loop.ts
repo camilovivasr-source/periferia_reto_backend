@@ -25,6 +25,7 @@ export type RespuestaChat = {
   toolCalls: LlamadaUI[];
   needsConfirmation: boolean;
   pendientes: Pendiente[];
+  sugerencias: string[];
   modo: string;
   tokensSesion: number;
 };
@@ -74,6 +75,23 @@ export function interpretarRespuesta(texto: string): 'confirma' | 'rechaza' | 'o
   if (/\b(no|cancela\w*|rechaz\w*|detente|espera|todavia no|aun no)\b/.test(t)) return 'rechaza';
   if (/\b(confirmo|confirmado|confirmada|si|adelante|procede|proceder|crea\w*|hazlo|dale|ok|okay|de acuerdo|autorizo|acepto)\b/.test(t)) return 'confirma';
   return 'otro';
+}
+
+/** Respuestas rapidas coherentes con el estado: las calcula el servidor, no el modelo. */
+export function sugerir(llamadas: LlamadaUI[], pendientes: Pendiente[]): string[] {
+  if (pendientes.length) {
+    const c = pendientes[0].caso;
+    return [`Confirmo: crea la OC de ${c} con las excepciones indicadas.`, `No, cancela ${c}.`, `¿Por qué ${c} requiere confirmación?`];
+  }
+  const ultimo = (n: string) => [...llamadas].reverse().find((l) => l.nombre === n);
+  const crear = ultimo('oc_crear');
+  const validar = ultimo('oc_validar');
+  const caso = (l?: LlamadaUI) => (l?.args as { caso?: string } | undefined)?.caso;
+  if (crear?.ok) return ['Muéstrame el resumen del control', '¿Qué casos faltan por procesar?', 'Procesa otro caso'];
+  if (validar && !validar.ok) return ['¿Qué casos hay disponibles?'];
+  if (validar && (validar.resultado as { apta?: boolean }).apta === false) return [`¿Qué debo pedirle al solicitante de ${caso(validar)}?`, '¿Qué casos faltan por procesar?', 'Procesa otro caso'];
+  if (validar && (validar.resultado as { apta?: boolean }).apta === true) return [`Sí, crea la OC de ${caso(validar)}`, '¿Qué controles pasó?'];
+  return ['¿Qué casos hay disponibles?', 'Procesa la solicitud sol-001', 'Muéstrame el resumen del control'];
 }
 
 const casosMencionados = (texto: string) => [...new Set([...texto.toLowerCase().matchAll(/sol-\d{3}/g)].map((m) => m[0]))];
@@ -186,7 +204,7 @@ export class Agente {
     }
     s.concedidas.clear();
     const pendientes: Pendiente[] = [...s.pendientes].map(([caso, v]) => ({ caso, confirmaciones: v.confirmaciones }));
-    const respuesta: RespuestaChat = { sessionId: s.id, reply, toolCalls: llamadas, needsConfirmation: pendientes.length > 0, pendientes, modo: this.o.modo, tokensSesion: s.tokens };
+    const respuesta: RespuestaChat = { sessionId: s.id, reply, toolCalls: llamadas, needsConfirmation: pendientes.length > 0, pendientes, sugerencias: sugerir(llamadas, pendientes), modo: this.o.modo, tokensSesion: s.tokens };
     s.historial.push({ rol: 'assistant', contenido: reply, ts: ahora(), toolCalls: llamadas, needsConfirmation: respuesta.needsConfirmation });
     return respuesta;
   }

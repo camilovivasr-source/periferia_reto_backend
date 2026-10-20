@@ -142,11 +142,11 @@ describe('Conocimiento, prompt y registro de llamadas', () => {
 
   it('todas las herramientas publican un JSON schema con descripciones', () => {
     const defs = definiciones();
-    assert.deepEqual(defs.map((d) => d.name), ['oc_leer_paquete', 'oc_validar', 'oc_construir_payload', 'oc_generar_evidencia', 'oc_crear']);
+    assert.deepEqual(defs.map((d) => d.name), ['oc_leer_paquete', 'oc_validar', 'oc_construir_payload', 'oc_generar_evidencia', 'oc_crear', 'oc_listar_casos', 'oc_consultar_maestro', 'oc_resumen_control']);
     for (const d of defs) {
       assert.ok(d.description.length > 20);
       const p = d.parameters as { properties: Record<string, { description?: string }> };
-      assert.ok(p.properties.caso.description);
+      for (const prop of Object.values(p.properties ?? {})) assert.ok(prop.description, `${d.name} sin descripcion de campo`);
     }
   });
 
@@ -154,5 +154,48 @@ describe('Conocimiento, prompt y registro de llamadas', () => {
     const lineas = (await readFile(path.join(out, 'log.jsonl'), 'utf8')).trim().split('\n').map((l) => JSON.parse(l));
     assert.ok(lineas.length > 5);
     assert.ok(lineas.every((l) => l.tool && l.sessionId && 'ok' in l));
+  });
+});
+
+describe('Conversacion: consultas, sugerencias y panorama', () => {
+  it('lista de casos y resumen de control con datos reales, sin crear nada', async () => {
+    const a = await agente(new PracticaAdapter());
+    const t = await a.turno('sesion-0010', '¿Que casos hay disponibles?');
+    assert.equal(t.toolCalls[0].nombre, 'oc_listar_casos');
+    assert.match(t.reply, /sol-004/);
+    const c = await a.turno('sesion-0010', 'muestrame el resumen del control');
+    assert.equal(c.toolCalls[0].nombre, 'oc_resumen_control');
+  });
+
+  it('consulta de maestros filtrada', async () => {
+    const { ejecutarHerramienta } = await import('../src/tools/registry.js');
+    const r = await ejecutarHerramienta('oc_consultar_maestro', { maestro: 'centros_costo', buscar: 'CC-2020' }, { directory: process.cwd(), sessionId: 't' });
+    assert.equal(r.ok, true);
+    const d = r.data as { total: number; filas: Array<{ aprobadores: Array<{ tope: number }> }> };
+    assert.equal(d.total, 1);
+    assert.equal(d.filas[0].aprobadores[0].tope, 30000000);
+    const mal = await ejecutarHerramienta('oc_consultar_maestro', { maestro: 'nomina' }, { directory: process.cwd(), sessionId: 't' });
+    assert.equal(mal.ok, false);
+  });
+
+  it('el resumen de control mide el porcentaje de retroactivas', async () => {
+    const { resumenControl } = await import('../src/domain/casos.js');
+    const { entornoDe } = await import('../src/domain/data.js');
+    const a = await agente(new PracticaAdapter());
+    await a.turno('sesion-0011', 'procesa sol-005');
+    await a.turno('sesion-0011', 'confirmo');
+    const r = await resumenControl(entornoDe(process.cwd()));
+    assert.ok(r.oc_retroactivas >= 1);
+    assert.ok(r.porcentaje_retroactivas > 0);
+  });
+
+  it('las sugerencias dependen del estado (confirmacion pendiente, bloqueo, creada)', async () => {
+    const a = await agente(new PracticaAdapter());
+    const pend = await a.turno('sesion-0012', 'procesa sol-004');
+    assert.match(pend.sugerencias[0], /^Confirmo: crea la OC de sol-004/);
+    const bloq = await a.turno('sesion-0013', 'procesa sol-003');
+    assert.match(bloq.sugerencias[0], /pedirle al solicitante de sol-003/);
+    const ok = await a.turno('sesion-0014', 'procesa sol-006 y no la crees todavia');
+    assert.ok(ok.sugerencias.length > 0);
   });
 });

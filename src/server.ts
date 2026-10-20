@@ -8,7 +8,9 @@ import { Agente, cargarSistema, type EventoAgente } from './agent/loop.js';
 import { PracticaAdapter } from './agent/practice.js';
 import { GeminiAdapter, destinoAiStudio, destinoVertex } from './llm/gemini.js';
 import type { LlmAdapter } from './llm/adapter.js';
-import { entornoDe, listarCasos } from './domain/data.js';
+import { readFile } from 'node:fs/promises';
+import { entornoDe } from './domain/data.js';
+import { resumenCasos } from './domain/casos.js';
 
 const chatSchema = z.object({ sessionId: z.string().regex(/^[A-Za-z0-9_-]{8,64}$/, 'sessionId invalido (8-64 caracteres alfanumericos)'), message: z.string().trim().min(1, 'message vacio').max(4000) }).strict();
 const MAX_BODY = 16_384;
@@ -57,8 +59,23 @@ export function crearManejador(config: Config, agente: Agente) {
         return enviar(200, { ok: true, ...agente.proveedor });
       }
       if (req.method === 'GET' && url.pathname === '/api/casos') {
-        return enviar(200, { casos: await listarCasos(entornoDe(config.directory, { FIXTURES_DIR: config.fixturesDir, OUT_DIR: config.outDir })) });
+        const detalle = await resumenCasos(entornoDe(config.directory, { FIXTURES_DIR: config.fixturesDir, OUT_DIR: config.outDir }));
+        return enviar(200, { casos: detalle.map((c) => c.caso), detalle });
       }
+      // Descargas de evidencia y control (nombres de archivo en lista cerrada: sin rutas arbitrarias).
+      const descarga = /^\/api\/archivos\/(sol-\d{3})\/(aprobacion\.pdf|aprobacion\.txt|trazabilidad\.json)$/.exec(url.pathname);
+      const tipos: Record<string, string> = { pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', json: 'application/json; charset=utf-8' };
+      const servir = async (ruta: string, nombre: string, tipo: string) => {
+        try {
+          const cuerpo = await readFile(ruta);
+          res.writeHead(200, { 'Content-Type': tipo, 'Content-Disposition': `attachment; filename="${nombre}"`, 'Cache-Control': 'no-store' });
+          res.end(cuerpo);
+        } catch {
+          enviar(404, { error: 'Archivo aun no generado: procese la solicitud primero.', requestId });
+        }
+      };
+      if (req.method === 'GET' && descarga) return servir(path.join(config.outDir, descarga[1], descarga[2]), `${descarga[1]}-${descarga[2]}`, tipos[descarga[2].split('.').pop()!]);
+      if (req.method === 'GET' && url.pathname === '/api/control.csv') return servir(path.join(config.outDir, 'control.csv'), 'control.csv', 'text/csv; charset=utf-8');
       const sesion = /^\/api\/sessions\/([A-Za-z0-9_-]{8,64})$/.exec(url.pathname);
       if (req.method === 'GET' && sesion) {
         const h = agente.historial(sesion[1]);

@@ -25,6 +25,12 @@ export function resumir(nombre: string, r: Resultado): string {
       return `Evidencia ${String(d.ruta)} · sha256 ${String(d.sha256).slice(0, 12)}…`;
     case 'oc_crear':
       return d.idempotente ? `OC ${String(d.numero_oc)} ya existia (idempotente)` : `OC ${String(d.numero_oc)} creada`;
+    case 'oc_listar_casos':
+      return `${(r.data as unknown[]).length} casos listados`;
+    case 'oc_consultar_maestro':
+      return `${String(d.maestro)}: ${String(d.total)} registro(s)`;
+    case 'oc_resumen_control':
+      return `${String(d.intentos)} intento(s) · ${lista(d.oc_creadas).length} OC creada(s) · ${String(d.porcentaje_retroactivas)} % retroactivas`;
     default:
       return 'OK';
   }
