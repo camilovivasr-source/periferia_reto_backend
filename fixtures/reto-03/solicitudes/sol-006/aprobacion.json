@@ -1,6 +1,10 @@
 {
-  "solicitudId": "sol-006",
-  "aprobadorId": "lider-1",
-  "montoCentavos": 119000000,
-  "requestHash": "a92851c3b6863b299cadf03d288b36c0304c1e9ba1aecd9c94f301cb91570521"
+  "de": "mlopez@periferia-ficticia.com",
+  "para": "andrés.beltrán@periferia-ficticia.com",
+  "cc": [
+    "compras@periferia-ficticia.com"
+  ],
+  "fecha": "2026-08-29T12:00:00-05:00",
+  "asunto": "RE: Solicitud de orden de compra SOL-006",
+  "cuerpo": "Aprobado.\n\nMariana López"
 }

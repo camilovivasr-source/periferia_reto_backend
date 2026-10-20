@@ -1,6 +1,10 @@
 {
-  "solicitudId": "sol-004",
-  "aprobadorId": "lider-1",
-  "montoCentavos": 118000000,
-  "requestHash": "ed2a958be27e254e71c0435d77bd4b70942bac1bec680780b67e596fa878f04c"
+  "de": "dgarcia@periferia-ficticia.com",
+  "para": "natalia.ríos@periferia-ficticia.com",
+  "cc": [
+    "compras@periferia-ficticia.com"
+  ],
+  "fecha": "2026-08-26T18:45:00-05:00",
+  "asunto": "RE: Solicitud de orden de compra SOL-004",
+  "cuerpo": "Aprobado por 25 millones según la solicitud.\n\nDiego García\nDirector de Tecnología"
 }

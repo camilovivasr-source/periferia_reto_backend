@@ -1,2 +1,0 @@
-fechaFactura: 2026-10-18
-numero: FACTURA-FICTICIA-006

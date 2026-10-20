@@ -4,14 +4,11 @@
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "strict": true,
+    "noUncheckedIndexedAccess": false,
     "outDir": "dist",
     "rootDir": ".",
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": [
-    "src/**/*.ts",
-    "demo.ts",
-    "tests/**/*.ts"
-  ]
+  "include": ["src/**/*.ts", "demo.ts", "tests/**/*.ts", "modulo/**/*.ts"]
 }

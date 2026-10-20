@@ -1,7 +1,6 @@
 .git
 node_modules
 dist
+out
 .env
 *.log
-gha-creds-*.json
-.runtime-env.json

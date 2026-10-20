@@ -1,6 +1,10 @@
 {
-  "solicitudId": "sol-001",
-  "aprobadorId": "lider-1",
-  "montoCentavos": 119000000,
-  "requestHash": "ee35722cff620711fcd4d03e2cfac8d4d538de0004e8f314982f52729e3de5e5"
+  "de": "mlopez@periferia-ficticia.com",
+  "para": "juan.camargo@periferia-ficticia.com",
+  "cc": [
+    "compras@periferia-ficticia.com"
+  ],
+  "fecha": "2026-08-21T10:02:00-05:00",
+  "asunto": "RE: Solicitud de orden de compra SOL-001",
+  "cuerpo": "Aprobado, proceder con la orden de compra.\n\nMariana López\nGerente de Tecnología"
 }

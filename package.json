@@ -1,31 +1,27 @@
 {
   "name": "reto-03-backend",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": {
-    "node": ">=20"
-  },
+  "engines": { "node": ">=20" },
   "scripts": {
     "dev": "node --import tsx src/server.ts",
     "start": "node dist/src/server.js",
-    "build": "node scripts/clean.mjs && tsc && node scripts/copy-assets.mjs",
+    "build": "node scripts/build.mjs",
     "demo": "node --import tsx demo.ts",
-    "test": "node --import tsx --test tests/*.test.ts",
+    "test": "node --import tsx --test --test-reporter=spec tests/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "smoke": "npm run build && node scripts/smoke-http.mjs",
-    "dev:practice": "npm run build && node scripts/start-practice.mjs",
-    "doctor": "node scripts/doctor.mjs",
+    "modulo": "node scripts/build-modulo.mjs",
     "check:gemini": "node scripts/check-gemini.mjs"
   },
   "dependencies": {
-    "zod": "^3.24.2",
     "dotenv": "^16.5.0",
-    "@google-cloud/firestore": "^7.11.0"
+    "zod": "^3.24.2",
+    "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
+    "@types/node": "^22.15.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.8.3",
-    "@types/node": "^22.15.0"
+    "typescript": "^5.8.3"
   }
 }

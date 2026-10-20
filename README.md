@@ -1,28 +1,52 @@
-# Periferia Reto 3 - Backend
+# Reto 3 · Agente de órdenes de compra SAP — Backend
 
-**Empieza por [INSTRUCTIVO_CLOUD_RUN.md](INSTRUCTIVO_CLOUD_RUN.md)** para despliegue manual. [ARQUITECTURA.md](ARQUITECTURA.md) explica módulos y trabajo del PRD.
+Agente conversacional en TypeScript (Node 20+) que lee el paquete de una solicitud, valida controles RC1–RC10 contra los maestros, construye la OC, genera la evidencia de aprobación y la crea en un SAP simulado, con confirmación humana para las excepciones. Frontend en el repo `periferia_reto_frontend`.
 
-## Local
+Documentación: [SOLUCION.md](SOLUCION.md) (arquitectura, ciclo del agente, controles, SAP real, retroactivas) · [INSTRUCTIVO_CLOUD_RUN.md](INSTRUCTIVO_CLOUD_RUN.md) (URL pública) · [docs/PRD.md](docs/PRD.md).
+
+## Arranque local (un comando para probar sin modelo)
 
 ```bash
 npm ci
-npm run doctor
-npm run typecheck
-npm test
-npm run demo
-npm run dev
+npm run demo      # los 6 casos sin LLM, idempotencia y confirmación de sol-004
+npm test          # pruebas
+npm run dev       # API en http://localhost:8080 (sin GEMINI_API_KEY: modo práctica)
 ```
 
-Copiar .env.example a .env. Backend usa Gemini y requiere clave; para estudiar sin modelo ejecutar npm run dev:practice. Frontend local apunta al backend8080 y usa BACKEND_AUTH=none. Abrir frontend en3000.
+Con modelo: `cp .env.example .env`, escribir `GEMINI_API_KEY` y `npm run check:gemini && npm run dev`. La clave solo vive en el entorno del servidor; nunca llega al front, a los logs ni a las respuestas.
 
-Acceso de revisor local: local-review-only. Es un código educativo, no usarlo en Cloud Run. Cloud exige secretos distintos y aleatorios; setup-manual.sh los crea.
+Chat completo en local: backend en `:8080` y, en el repo del frontend, `npm ci && npm start` (abre http://localhost:3000, `BACKEND_AUTH=none`).
 
-## Funciones
+## Variables de entorno
 
-Dashboard de chat/auditoría, eventos SSE, controles verificables, resumen SAP simulado, justificación obligatoria, aprobación según autoridad y rechazo persistente. Supervisor y retroactividad solo si se configuran políticas explícitas; no existe botón universal de excepción.
+| Variable | Defecto | Uso |
+|---|---|---|
+| `PORT` | `8080` | Puerto HTTP. |
+| `AGENT_MODE` | `auto` | `auto`: Gemini si hay clave, si no modo práctica. `llm` exige clave. `practice` fuerza comandos sin LLM. |
+| `GEMINI_API_KEY` | — | Clave del modelo (Secret Manager en Cloud Run). |
+| `GEMINI_MODEL` | `gemini-2.5-flash` | Modelo. |
+| `MAX_ITERACIONES` | `25` | Tope de llamadas modelo↔herramientas por turno. |
+| `MAX_TOKENS_SESION` | `300000` | Tope de tokens por sesión. |
+| `LLM_TIMEOUT_MS` | `45000` | Timeout al proveedor. |
+| `FIXTURES_DIR` / `OUT_DIR` | `fixtures/reto-03` / `out` | Insumos (solo lectura) y salidas (`sap/ordenes.jsonl`, `control.csv`, `log.jsonl`, `<caso>/…`). |
 
-## Cloud Run
+## API
 
-Backend privado IAM, frontend público con proxy. Puerto8080, Dockerfiles, Secret Manager, Firestore y scripts manuales. GitHub Actions CI no requiere nube; CD está desactivado mientras DEPLOY_ENABLED no sea true.
+| Método | Ruta | Descripción |
+|---|---|---|
+| `POST` | `/api/chat` | `{ sessionId, message }` → `{ reply, toolCalls[], needsConfirmation, pendientes[] }`. Con `Accept: text/event-stream` emite `tool_start`, `tool_end` y `complete`. |
+| `GET` | `/api/sessions/:id` | Historial de la sesión. |
+| `GET` | `/api/health` | `{ ok, proveedor, modelo, modo }`, sin claves. |
+| `GET` | `/api/casos` | Casos disponibles. |
 
-Los fixtures y reglas son educativos. Falta PRD oficial; la presencia de archivos no certifica aprobación ni retroactividad. No se han probado credenciales Gemini ni despliegue real en tu proyecto. El PDF de primera edición dentro de backend/docs es material conceptual histórico; este instructivo y arquitectura son las referencias actuales.
+## Estructura
+
+```
+agent/prompt.md            comportamiento     src/tools/oc.ts      herramientas oc_* (zod)
+src/knowledge/*.md         conocimiento       src/domain/          reglas, payload, evidencia
+src/agent/loop.ts          ciclo y sesiones   src/sap/             SapAdapter + mock
+src/llm/                   LlmAdapter+Gemini  modulo/              agente empaquetado (bonus)
+demo.ts                    6 casos sin modelo fixtures/            insumos (no modificar)
+```
+
+`npm run modulo` regenera `modulo/` a partir de las mismas fuentes (una prueba falla si quedan desactualizadas).

@@ -1,11 +1,13 @@
 {
-  "id": "sol-006",
-  "nit": "900000001",
-  "centroCosto": "CC-01",
-  "baseCentavos": 100000000,
-  "ivaCentavos": 19000000,
-  "totalCentavos": 119000000,
-  "indicadorIva": "IVA19",
-  "condicionPago": "P30",
-  "fechaSolicitud": "2026-10-19"
+  "solicitud_id": "SOL-2026-006",
+  "solicitante": "Andrés Beltrán",
+  "proveedor_nombre": "TecnoSuministros S.A.S.",
+  "descripcion": "Diademas con micrófono para la mesa de soporte",
+  "centro_costo": "CC-1010",
+  "subarea": "Soporte",
+  "cantidad": 30,
+  "valor_unitario": 180000,
+  "valor_total": 5400000,
+  "moneda": "COP",
+  "fecha_solicitud": "2026-08-29"
 }
