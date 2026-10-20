@@ -6,6 +6,7 @@ import { z } from 'zod';
 import type { Agente } from '../agent/loop.js';
 import type { EventoAgente } from '../agent/tipos.js';
 import { resumenCasos } from '../application/consultas.js';
+import { NuevaSolicitudSchema, opcionesMaestros, registrarSolicitud } from '../application/registro.js';
 import type { Config } from '../config.js';
 import { entornoDe } from '../data.js';
 import { CuerpoGrande, leerJson } from './cuerpo.js';
@@ -23,7 +24,7 @@ const chatSchema = z
 const TIPOS: Record<string, string> = { pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', json: 'application/json; charset=utf-8', csv: 'text/csv; charset=utf-8' };
 
 export function crearManejador(config: Config, agente: Agente) {
-  const env = entornoDe(config.directory, { FIXTURES_DIR: config.fixturesDir, OUT_DIR: config.outDir });
+  const env = entornoDe(config.directory, { ...process.env, FIXTURES_DIR: config.fixturesDir, OUT_DIR: config.outDir });
 
   /** Descarga de un archivo de out/ con nombre de la lista cerrada de las rutas (nunca una ruta arbitraria). */
   const descargar = async ({ res, requestId }: Peticion, ruta: string, nombre: string) => {
@@ -61,6 +62,12 @@ export function crearManejador(config: Config, agente: Agente) {
       },
     },
     { metodo: 'POST', patron: /^\/api\/chat$/, manejar: (p) => chat(p) },
+    {
+      metodo: 'POST',
+      patron: /^\/api\/solicitudes$/,
+      manejar: async ({ req, res }) => json(res, 201, await registrarSolicitud(env, NuevaSolicitudSchema.parse(await leerJson(req)))),
+    },
+    { metodo: 'GET', patron: /^\/api\/opciones$/, manejar: async ({ res }) => json(res, 200, await opcionesMaestros(env)) },
     ...rutasAnalisis(config),
   ];
 

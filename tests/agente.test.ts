@@ -145,7 +145,7 @@ describe('Conocimiento, prompt y registro de llamadas', () => {
 
   it('todas las herramientas publican un JSON schema con descripciones', () => {
     const defs = definiciones();
-    assert.deepEqual(defs.map((d) => d.name), ['oc_leer_paquete', 'oc_validar', 'oc_construir_payload', 'oc_generar_evidencia', 'oc_crear', 'oc_leer_excel', 'oc_listar_casos', 'oc_consultar_maestro', 'oc_resumen_control']);
+    assert.deepEqual(defs.map((d) => d.name), ['oc_leer_paquete', 'oc_validar', 'oc_construir_payload', 'oc_generar_evidencia', 'oc_crear', 'oc_leer_excel', 'oc_listar_casos', 'oc_consultar_maestro', 'oc_resumen_control', 'oc_consultar_conocimiento']);
     for (const d of defs) {
       assert.ok(d.description.length > 20);
       const p = d.parameters as { properties: Record<string, { description?: string }> };

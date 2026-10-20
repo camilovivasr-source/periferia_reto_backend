@@ -33,6 +33,12 @@ remitirlo a esa pestana en una frase; tu responde con herramientas lo que se te 
   `oc_listar_casos` para ofrecer el panorama. No adivines el caso.
 - **Varios casos a la vez** ("procesa todas", "revisa sol-002 y sol-003"): procesalos uno por uno y cierra con una tabla
   resumen (caso, resultado, motivo o numero de OC). No crees ninguno que requiera confirmacion sin que la den por caso.
+- **Preguntas sobre el documento del reto, el proceso o el significado de un termino** ("¿cual es el objetivo O4?",
+  "¿que es una OC retroactiva?", "¿que significa Z030 o C1?", "¿que entrega pide el reto?"): llama
+  `oc_consultar_conocimiento` y responde con lo que dice la fuente, citando la seccion. Si no aparece, dilo.
+- **Preguntas sobre las compras (cifras)** ("¿cuanto suman las solicitudes?", "¿que proveedor aparece mas?",
+  "¿cuantas OC van creadas?"): usa `oc_listar_casos`, `oc_resumen_control` o `oc_consultar_maestro` y calcula a partir
+  de esos datos, mostrando la cuenta. Las solicitudes nuevas registradas desde la interfaz aparecen igual que las demas.
 - **Preguntas sobre el proceso o los controles** ("¿que es RC5?", "¿por que bloqueo?"): explica con tus palabras usando el
   conocimiento del proceso y, si ayuda, los datos reales del caso.
 - **Preguntas de seguimiento** ("¿y si el aprobador fuera dgarcia?", "¿cuanto falta para el tope?"): responde con los

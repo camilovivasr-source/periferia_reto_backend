@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { consultarMaestro, MAESTROS, resumenCasos, resumenControl } from '../application/consultas.js';
 import { construirOrdenCaso, crearOrdenCaso, generarEvidenciaCaso, leerPaqueteCaso, validarCaso } from '../application/ordenes.js';
 import { ok, seguro } from '../application/resultado.js';
+import { consultarConocimiento } from '../application/conocimiento.js';
 import { leerExcel } from '../application/excel.js';
 import { entornoDe } from '../data.js';
 import type { ToolDef } from './types.js';
@@ -80,4 +81,10 @@ export const resumen_control: ToolDef<Record<string, never>> = {
   description: 'Resume el registro de control (out/control.csv): intentos por resultado, OC creadas y porcentaje de OC retroactivas. Usar para preguntas de medicion, auditoria o "que se ha hecho hasta ahora".',
   args: {},
   execute: (_args, ctx) => seguro(async () => ok(await resumenControl(entornoDe(ctx.directory)))),
+};
+
+export const consultar_conocimiento: ToolDef<{ pregunta: z.ZodString }> = {
+  description: 'Busca en el documento del reto (PRD) y en el conocimiento del proceso las secciones que responden una pregunta sobre objetivos, reglas, significados de terminos, arquitectura, entregables o el proceso de compras. Usar antes de explicar algo del documento.',
+  args: { pregunta: z.string().min(2).max(300).describe('La pregunta o los terminos a buscar, por ejemplo "que significa RC9" o "metricas de exito del reto"') },
+  execute: (args, ctx) => seguro(async () => ok(await consultarConocimiento(ctx.directory, args.pregunta))),
 };

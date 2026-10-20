@@ -15,6 +15,7 @@ RUN npm ci --omit=dev
 COPY --from=build /app/dist ./dist
 COPY agent ./agent
 COPY src/knowledge ./src/knowledge
+COPY docs/PRD.md ./docs/PRD.md
 COPY fixtures ./fixtures
 EXPOSE 8080
 CMD ["npm", "start"]

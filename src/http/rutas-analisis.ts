@@ -10,7 +10,7 @@ const consultaSchema = z.object({ centro: z.string().regex(/^[A-Za-z0-9-]{2,20}$
 
 /** Rutas de la pestana de analisis: solo lectura (la simulacion ocurre en memoria). */
 export function rutasAnalisis(config: Config): Ruta[] {
-  const env = entornoDe(config.directory, { FIXTURES_DIR: config.fixturesDir, OUT_DIR: config.outDir });
+  const env = entornoDe(config.directory, { ...process.env, FIXTURES_DIR: config.fixturesDir, OUT_DIR: config.outDir });
   return [
     { metodo: 'GET', patron: /^\/api\/analisis\/panel$/, manejar: async ({ res }) => json(res, 200, await panelControl(env, config.minutosManualesPorOc)) },
     { metodo: 'GET', patron: /^\/api\/analisis\/desvio$/, manejar: async ({ res }) => json(res, 200, await desvioProceso(env)) },

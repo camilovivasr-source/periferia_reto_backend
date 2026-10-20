@@ -18,13 +18,15 @@ import { soloFecha } from './domain/util.js';
 /** Error de datos de entrada: se devuelve como { ok:false, error }, nunca como rechazo de negocio. */
 export class DatosError extends Error {}
 
-export type Entorno = { directory: string; fixturesDir: string; outDir: string };
+/** fixturesDir: insumos entregados (solo lectura). solicitudesDir: solicitudes nuevas registradas desde la UI. */
+export type Entorno = { directory: string; fixturesDir: string; outDir: string; solicitudesDir: string };
 
 export function entornoDe(directory: string, env: NodeJS.ProcessEnv = process.env): Entorno {
   return {
     directory,
     fixturesDir: path.resolve(directory, env.FIXTURES_DIR ?? 'fixtures/reto-03'),
     outDir: path.resolve(directory, env.OUT_DIR ?? 'out'),
+    solicitudesDir: path.resolve(directory, env.SOLICITUDES_DIR ?? path.join(env.OUT_DIR ?? 'out', 'solicitudes')),
   };
 }
 
@@ -75,20 +77,33 @@ export async function cargarMaestros(env: Entorno): Promise<Maestros> {
   return { proveedores, centros, indicadoresIva, condicionesPago };
 }
 
-export async function listarCasos(env: Entorno): Promise<string[]> {
+async function carpetas(dir: string): Promise<string[]> {
   try {
-    const entradas = await readdir(path.join(env.fixturesDir, 'solicitudes'), { withFileTypes: true });
-    return entradas.filter((e) => e.isDirectory() && CASO.test(e.name)).map((e) => e.name).sort();
+    const entradas = await readdir(dir, { withFileTypes: true });
+    return entradas.filter((e) => e.isDirectory() && CASO.test(e.name)).map((e) => e.name);
   } catch {
     return [];
   }
 }
 
+/** Casos de fixtures (entregados) mas los registrados desde la UI. Si un nombre se repite, gana fixtures. */
+export async function listarCasos(env: Entorno): Promise<string[]> {
+  const [entregados, nuevos] = await Promise.all([carpetas(path.join(env.fixturesDir, 'solicitudes')), carpetas(env.solicitudesDir)]);
+  return [...new Set([...entregados, ...nuevos])].sort();
+}
+
+/** Carpeta del caso: primero fixtures, luego solicitudes registradas. */
+export async function carpetaDeCaso(env: Entorno, caso: string): Promise<string> {
+  validarNombreCaso(caso);
+  if ((await carpetas(path.join(env.fixturesDir, 'solicitudes'))).includes(caso)) return path.join(env.fixturesDir, 'solicitudes', caso);
+  if ((await carpetas(env.solicitudesDir)).includes(caso)) return path.join(env.solicitudesDir, caso);
+  throw new DatosError(`No existe el caso "${caso}"`);
+}
+
 /** Lee y normaliza el paquete de un caso. Un adjunto ausente es null y queda en `faltantes`. */
 export async function leerPaquete(env: Entorno, caso: string): Promise<Paquete> {
   validarNombreCaso(caso);
-  const dir = path.join(env.fixturesDir, 'solicitudes', caso);
-  if (!(await listarCasos(env)).includes(caso)) throw new DatosError(`No existe el caso "${caso}"`);
+  const dir = await carpetaDeCaso(env, caso);
   const [correo, solicitud] = await Promise.all([
     leerJson(path.join(dir, 'correo.json'), CorreoSchema, `${caso}/correo.json`),
     leerJson(path.join(dir, 'solicitud.json'), SolicitudSchema, `${caso}/solicitud.json`),

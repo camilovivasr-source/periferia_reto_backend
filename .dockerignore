@@ -5,4 +5,5 @@ out
 .env
 *.log
 tests
-docs
+docs/*.pdf
+docs/GUIA_ESTUDIO.md

@@ -110,3 +110,12 @@ describe('API de analisis', () => {
     assert.match(await r.text(), /^estado;numero_oc;solicitud_id/);
   });
 });
+
+describe('API de registro', () => {
+  it('opciones de los maestros y alta de una solicitud (201) o error de validacion (400)', async () => {
+    const o = await (await fetch(base + '/api/opciones')).json();
+    assert.ok(o.centros.length === 3 && o.proveedores.length === 5);
+    const mala = await post('/api/solicitudes', { solicitud: { descripcion: 'x' } });
+    assert.equal(mala.status, 400);
+  });
+});

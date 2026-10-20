@@ -25,6 +25,8 @@ export function resumir(nombre: string, r: Resultado): string {
       return `Evidencia ${String(d.ruta)} · sha256 ${String(d.sha256).slice(0, 12)}…`;
     case 'oc_crear':
       return d.idempotente ? `OC ${String(d.numero_oc)} ya existia (idempotente)` : `OC ${String(d.numero_oc)} creada`;
+    case 'oc_consultar_conocimiento':
+      return `${lista(d.resultados).length} seccion(es): ${lista(d.resultados).map((x) => String(x.seccion)).join(' | ')}`.slice(0, 220);
     case 'oc_leer_excel':
       return `${String(d.total)} fila(s), columnas: ${(d.columnas as string[]).join(', ')}`;
     case 'oc_listar_casos':
