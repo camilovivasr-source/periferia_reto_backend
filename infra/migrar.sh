@@ -7,7 +7,8 @@
 set -euo pipefail
 GITHUB_OWNER=${GITHUB_OWNER:-camilovivasr-source}
 BRANCH=${BRANCH:-main}
-WORK=${WORK:-"$HOME/reto03"}
+SELF=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
+if [ -d "$SELF/periferia_reto_backend" ] && [ -d "$SELF/periferia_reto_frontend" ]; then LOCAL=1; WORK="$SELF"; else LOCAL=0; WORK=${WORK:-"$HOME/reto03"}; fi
 command -v gcloud >/dev/null || { echo 'Ejecuta esto en Cloud Shell (falta gcloud).' >&2; exit 1; }
 
 # Autenticacion: Cloud Shell ya trae sesion; si no hay cuenta activa, se hace login por codigo.
@@ -29,9 +30,7 @@ clonar() { # repo
   if [ -d "$dir/.git" ]; then git -C "$dir" fetch -q origin && git -C "$dir" checkout -q "$BRANCH" 2>/dev/null || true; git -C "$dir" pull -q --ff-only origin "$BRANCH" || true
   else mkdir -p "$WORK"; git clone -q -b "$BRANCH" "https://github.com/$GITHUB_OWNER/$1.git" "$dir" || git clone -q "https://github.com/$GITHUB_OWNER/$1.git" "$dir"; fi
 }
-echo '>> Clonando repositorios'
-clonar periferia_reto_backend
-clonar periferia_reto_frontend
+if [ "$LOCAL" = 0 ]; then echo '>> Clonando repositorios'; clonar periferia_reto_backend; clonar periferia_reto_frontend; fi
 cd "$WORK/periferia_reto_backend"
 
 # Clave Gemini: solo se pide si el secreto aun no tiene version. Nunca se imprime ni queda en el historial.
