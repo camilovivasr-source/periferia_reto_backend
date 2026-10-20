@@ -59,3 +59,31 @@ describe('Consulta del documento y del conocimiento', () => {
     assert.ok((retro.data as { resultados: unknown[] }).resultados.length > 0);
   });
 });
+
+describe('Carga de una carpeta de solicitud', () => {
+  const leer = (f: string) => import('node:fs/promises').then((m) => m.readFile(`fixtures/reto-03/solicitudes/sol-004/${f}`, 'utf8'));
+  it('sube los archivos de la carpeta, la valida y queda disponible', async () => {
+    const { registrarCarpeta, CarpetaSchema } = await import('../src/application/registro.js');
+    const env = entornoDe(process.cwd());
+    const solicitud = JSON.parse(await leer('solicitud.json'));
+    const archivos = [
+      { nombre: 'sol-100/solicitud.json', contenido: JSON.stringify({ ...solicitud, solicitud_id: 'SOL-2026-100' }) },
+      { nombre: 'sol-100/cotizacion.txt', contenido: await leer('cotizacion.txt') },
+      { nombre: 'sol-100/aprobacion.json', contenido: await leer('aprobacion.json') },
+      { nombre: 'sol-100/notas.docx', contenido: 'ignorado' },
+    ];
+    const r = await registrarCarpeta(env, CarpetaSchema.parse({ nombre: 'sol-100', archivos }));
+    assert.equal(r.caso, 'sol-100');
+    assert.deepEqual(r.confirmaciones.map((c) => c.codigo), ['RC5']);
+    assert.deepEqual(r.ignorados, ['notas.docx']);
+    assert.ok((await listarCasos(env)).includes('sol-100'));
+    await assert.rejects(registrarCarpeta(env, CarpetaSchema.parse({ archivos: [archivos[0]] })), /Ya existe/);
+  });
+  it('rechaza carpetas sin solicitud.json, JSON malformado y esquemas invalidos', async () => {
+    const { registrarCarpeta, CarpetaSchema } = await import('../src/application/registro.js');
+    const env = entornoDe(process.cwd());
+    await assert.rejects(registrarCarpeta(env, CarpetaSchema.parse({ archivos: [{ nombre: 'cotizacion.txt', contenido: 'x' }] })), /solicitud\.json/);
+    await assert.rejects(registrarCarpeta(env, CarpetaSchema.parse({ archivos: [{ nombre: 'solicitud.json', contenido: '{no' }] })), /malformado/);
+    await assert.rejects(registrarCarpeta(env, CarpetaSchema.parse({ archivos: [{ nombre: 'solicitud.json', contenido: '{"solicitud_id":"X"}' }] })), /invalido/);
+  });
+});

@@ -1,6 +1,7 @@
 import { mkdir, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { z } from 'zod';
+import { AprobacionRawSchema, CorreoSchema } from '../schemas.js';
 import { cargarMaestros, DatosError, leerPaquete, listarCasos, type Entorno } from '../data.js';
 import { validar } from '../domain/validate.js';
 import { SolicitudSchema } from '../schemas.js';
@@ -87,5 +88,76 @@ export async function opcionesMaestros(env: Entorno) {
     proveedores: m.proveedores.map((p) => ({ nombre: p.nombre, nit: p.nit, activo: p.activo })),
     indicadores_iva: m.indicadoresIva.map((i) => ({ codigo: i.codigo, descripcion: i.descripcion })),
     condiciones_pago: m.condicionesPago.map((c) => ({ codigo: c.codigo, descripcion: c.descripcion })),
+  };
+}
+
+const ARCHIVOS = ['correo.json', 'solicitud.json', 'cotizacion.txt', 'aprobacion.json', 'factura.txt'] as const;
+const MAX_ARCHIVO = 100_000;
+
+export const CarpetaSchema = z
+  .object({
+    nombre: z.string().max(60).optional(),
+    archivos: z.array(z.object({ nombre: z.string().max(60), contenido: z.string().max(MAX_ARCHIVO) }).strict()).min(1).max(12),
+  })
+  .strict();
+export type Carpeta = z.infer<typeof CarpetaSchema>;
+
+const nombreBase = (ruta: string) => ruta.split(/[\\/]/).pop()!.toLowerCase();
+
+/**
+ * Registra una carpeta de solicitud tal como llega por correo (solicitud.json, cotizacion.txt, aprobacion.json,
+ * correo.json, factura.txt). Solo se aceptan esos nombres; JSON invalido o fuera de esquema se rechaza con el motivo.
+ * Si el nombre de la carpeta es sol-NNN y esta libre se respeta; si no, se asigna el siguiente.
+ */
+export async function registrarCarpeta(env: Entorno, entrada: Carpeta) {
+  const porNombre = new Map<string, string>();
+  for (const a of entrada.archivos) {
+    const nombre = nombreBase(a.nombre);
+    if (!(ARCHIVOS as readonly string[]).includes(nombre)) continue;
+    porNombre.set(nombre, a.contenido);
+  }
+  const ignorados = entrada.archivos.map((a) => nombreBase(a.nombre)).filter((n) => !(ARCHIVOS as readonly string[]).includes(n));
+  const solicitudTxt = porNombre.get('solicitud.json');
+  if (!solicitudTxt) throw new DatosError('La carpeta debe incluir solicitud.json (los demas archivos son opcionales).');
+
+  const json = (nombre: string, texto: string): unknown => {
+    try { return JSON.parse(texto); } catch { throw new DatosError(`${nombre} no es JSON valido (malformado).`); }
+  };
+  const revisar = <T>(nombre: string, esquema: z.ZodType<T>): T | undefined => {
+    const texto = porNombre.get(nombre);
+    if (texto === undefined) return undefined;
+    const r = esquema.safeParse(json(nombre, texto));
+    if (!r.success) throw new DatosError(`${nombre} invalido: ${r.error.issues.map((i) => `${i.path.join('.') || '(raiz)'}: ${i.message}`).join('; ')}`);
+    return r.data;
+  };
+  const solicitud = revisar('solicitud.json', SolicitudSchema)!;
+  revisar('correo.json', CorreoSchema);
+  revisar('aprobacion.json', AprobacionRawSchema);
+
+  const existentes = await listarCasos(env);
+  if ((await readdir(env.solicitudesDir).catch(() => [])).length >= MAX_NUEVAS) throw new DatosError(`Se alcanzó el máximo de ${MAX_NUEVAS} solicitudes nuevas en esta instancia.`);
+  const pedido = entrada.nombre?.toLowerCase();
+  const siguiente = Math.max(0, ...existentes.map((c) => Number(/^sol-(\d+)$/.exec(c)?.[1] ?? 0))) + 1;
+  const caso = pedido && /^sol-\d{3}$/.test(pedido) && !existentes.includes(pedido) ? pedido : `sol-${String(siguiente).padStart(3, '0')}`;
+  const duplicada = (await Promise.all(existentes.map(async (c) => (await leerPaquete(env, c).catch(() => null))?.solicitud.solicitud_id))).includes(solicitud.solicitud_id);
+  if (duplicada) throw new DatosError(`Ya existe una solicitud con el id ${solicitud.solicitud_id}.`);
+
+  const dir = path.join(env.solicitudesDir, caso);
+  await mkdir(dir, { recursive: true });
+  for (const [nombre, contenido] of porNombre) await writeFile(path.join(dir, nombre), contenido, 'utf8');
+  if (!porNombre.has('correo.json')) {
+    await writeFile(path.join(dir, 'correo.json'), JSON.stringify({ id: `${caso}-correo`, de: 'carpeta@periferia-ficticia.com', asunto: `Solicitud ${solicitud.solicitud_id}`, fecha: `${solicitud.fecha_solicitud}T09:00:00-05:00`, cuerpo: 'Cargada como carpeta desde la interfaz.', adjuntos: [...porNombre.keys()] }, null, 2));
+  }
+  const [paquete, maestros] = await Promise.all([leerPaquete(env, caso), cargarMaestros(env)]);
+  const v = validar(paquete, maestros);
+  return {
+    caso,
+    solicitud_id: solicitud.solicitud_id,
+    estado: !v.apta ? 'BLOQUEADA' : v.confirmaciones.length ? 'REQUIERE_CONFIRMACION' : 'APTA',
+    bloqueos: v.bloqueos,
+    confirmaciones: v.confirmaciones,
+    faltantes: paquete.faltantes,
+    archivos: [...porNombre.keys()],
+    ignorados,
   };
 }

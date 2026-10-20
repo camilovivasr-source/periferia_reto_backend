@@ -6,10 +6,10 @@ import { z } from 'zod';
 import type { Agente } from '../agent/loop.js';
 import type { EventoAgente } from '../agent/tipos.js';
 import { resumenCasos } from '../application/consultas.js';
-import { NuevaSolicitudSchema, opcionesMaestros, registrarSolicitud } from '../application/registro.js';
+import { CarpetaSchema, NuevaSolicitudSchema, opcionesMaestros, registrarCarpeta, registrarSolicitud } from '../application/registro.js';
 import type { Config } from '../config.js';
 import { entornoDe } from '../data.js';
-import { CuerpoGrande, leerJson } from './cuerpo.js';
+import { CuerpoGrande, leerJson, MAX_BYTES_CARPETA } from './cuerpo.js';
 import { rutasAnalisis } from './rutas-analisis.js';
 import { adjunto, json, type Peticion, type Ruta } from './tipos.js';
 import { DatosError } from '../data.js';
@@ -66,6 +66,11 @@ export function crearManejador(config: Config, agente: Agente) {
       metodo: 'POST',
       patron: /^\/api\/solicitudes$/,
       manejar: async ({ req, res }) => json(res, 201, await registrarSolicitud(env, NuevaSolicitudSchema.parse(await leerJson(req)))),
+    },
+    {
+      metodo: 'POST',
+      patron: /^\/api\/solicitudes\/carpeta$/,
+      manejar: async ({ req, res }) => json(res, 201, await registrarCarpeta(env, CarpetaSchema.parse(await leerJson(req, MAX_BYTES_CARPETA)))),
     },
     { metodo: 'GET', patron: /^\/api\/opciones$/, manejar: async ({ res }) => json(res, 200, await opcionesMaestros(env)) },
     ...rutasAnalisis(config),

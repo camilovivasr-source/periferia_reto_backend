@@ -143,6 +143,7 @@ Las herramientas de creación ignoran `paquete`, `derivados` y `payload` que ree
 | `GET` | `/api/sessions/:id` | Historial de la sesión. |
 | `GET` | `/api/health` | `{ ok, proveedor, modelo, modo }`, sin claves. |
 | `GET` | `/api/casos` | Casos con su estado según los controles. |
+| `POST` | `/api/solicitudes/carpeta` | **Sube la carpeta de una solicitud** (`solicitud.json`, `cotizacion.txt`, `aprobacion.json`, `correo.json`, `factura.txt`): valida cada archivo, la guarda en `out/solicitudes` con el siguiente nombre libre y queda lista en la lista de casos. Solo `solicitud.json` es obligatorio. |
 | `GET` | `/api/opciones` | Opciones válidas de los maestros (centros, subáreas, aprobadores, proveedores, IVA, pagos) para el formulario de nueva solicitud. |
 | `POST` | `/api/solicitudes` | Registra una **nueva solicitud**. Se guarda en `out/solicitudes` (`SOLICITUDES_DIR`), nunca en `fixtures/`. |
 | `GET` | `/api/analisis/{panel,desvio,conciliacion,autoridad,caso/:caso}` · `POST /api/analisis/simular` | Pestaña Análisis (solo lectura; la simulación es en memoria). |

@@ -118,7 +118,7 @@ El agente **no las bloquea**: las detecta (RC8), exige confirmación humana expl
 | HU-5 Crear en SAP simulado | Hecho: secuencia desde 4500000001, idempotencia, `control.csv` | Idempotencia durable y adaptador real. |
 | HU-6 Errores | Hecho: `{ok:false,error}` legible, sin excepciones | Catálogo de errores del ERP. |
 | `oc_leer_excel` (P1 opcional) | Hecho: lee la primera hoja de un `.xlsx` dentro de `fixtures/` u `out/` (rutas y tamaño acotados); probado con un `.xlsx` generado | Mapear columnas reales de la plantilla de solicitud y leer `.pdf`/`.eml`. |
-| Registro de solicitudes nuevas desde la UI | Hecho: `POST /api/solicitudes` (zod) las guarda en `out/solicitudes` con el formato normalizado y pasan por los mismos controles | Ingesta directa desde el buzón de correo. |
+| Registro de solicitudes nuevas desde la UI | Hecho: subir/arrastrar la carpeta de la solicitud (`POST /api/solicitudes/carpeta`) o formulario (`POST /api/solicitudes`), ambos con zod las guarda en `out/solicitudes` con el formato normalizado y pasan por los mismos controles | Ingesta directa desde el buzón de correo. |
 | Preguntas sobre el documento y el proceso | Hecho: `oc_consultar_conocimiento` busca en `docs/PRD.md` y en el conocimiento del proceso y el agente cita la sección | Búsqueda semántica si crece la base documental. |
 | Pestaña «Análisis» (5 herramientas) | Hecho | Persistir históricos más allá de `out/` y filtros por periodo. |
 | Despliegue automático por push | Hecho (Actions + WIF); requiere ejecutar `infra/cicd.sh` una vez | Entornos separados (staging/producción) y aprobación manual del paso a producción. |
