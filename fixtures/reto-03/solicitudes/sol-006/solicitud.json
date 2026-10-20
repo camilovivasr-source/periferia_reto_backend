@@ -1,0 +1,11 @@
+{
+  "id": "sol-006",
+  "nit": "900000001",
+  "centroCosto": "CC-01",
+  "baseCentavos": 100000000,
+  "ivaCentavos": 19000000,
+  "totalCentavos": 119000000,
+  "indicadorIva": "IVA19",
+  "condicionPago": "P30",
+  "fechaSolicitud": "2026-10-19"
+}

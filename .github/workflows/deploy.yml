@@ -1,0 +1,100 @@
+name: CI and Cloud Run
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: cloud-run-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run doctor
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run demo
+      - run: npm run smoke
+  deploy:
+    needs: ci
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+      ARTIFACT_REPOSITORY: ${{ vars.ARTIFACT_REPOSITORY }}
+      SERVICE: ${{ vars.CLOUD_RUN_SERVICE }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate deployment configuration
+        env:
+          WIF: ${{ vars.WIF_PROVIDER }}
+          DEPLOYER: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+          RUNTIME: ${{ vars.RUNTIME_SERVICE_ACCOUNT }}
+          EXTRA: ${{ vars.GEMINI_API_KEY_SECRET }}
+        run: |
+          for name in PROJECT_ID REGION ARTIFACT_REPOSITORY SERVICE WIF DEPLOYER RUNTIME EXTRA; do
+            test -n "${!name}" || { echo "Missing repository variable: $name"; exit 1; }
+          done
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Build and push container
+        id: image
+        run: |
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          IMAGE="$REGION-docker.pkg.dev/$PROJECT_ID/$ARTIFACT_REPOSITORY/$SERVICE:$GITHUB_SHA"
+          docker build --tag "$IMAGE" .
+          docker push "$IMAGE"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+      - name: Prepare reviewer policy environment
+        env:
+          POLICIES: ${{ vars.REVIEWER_POLICIES_JSON || '[]' }}
+        run: python3 -c 'import json,os; json.dump({"REVIEWER_POLICIES_JSON":os.environ["POLICIES"]},open(".runtime-env.json","w"))'
+      - name: Deploy Cloud Run
+        id: deploy
+        uses: google-github-actions/deploy-cloudrun@v3
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          region: ${{ vars.GCP_REGION }}
+          service: ${{ vars.CLOUD_RUN_SERVICE }}
+          image: ${{ steps.image.outputs.image }}
+          env_vars_file: .runtime-env.json
+          env_vars: |-
+            AGENT_MODE=llm
+            GEMINI_MODEL=gemini-2.5-flash
+            STATE_STORE=firestore
+            FIRESTORE_DATABASE=(default)
+            HUMAN_AUTH_MODE=signed
+          secrets: |-
+            GEMINI_API_KEY=${{ vars.GEMINI_API_KEY_SECRET }}:latest
+            OPERATOR_SIGNING_KEY=${{ vars.OPERATOR_SIGNING_KEY_SECRET }}:latest
+          flags: >-
+            --no-allow-unauthenticated
+            --service-account=${{ vars.RUNTIME_SERVICE_ACCOUNT }}
+            --port=8080 --memory=512Mi --cpu=1
+            --min-instances=0 --max-instances=2 --concurrency=4 --timeout=120
+      - name: Permit frontend identity
+        env:
+          FRONTEND_SA: ${{ vars.FRONTEND_RUNTIME_SERVICE_ACCOUNT }}
+        run: |
+          test -n "$FRONTEND_SA"
+          gcloud run services add-iam-policy-binding "$SERVICE" --project "$PROJECT_ID" --region "$REGION" --member="serviceAccount:$FRONTEND_SA" --role=roles/run.invoker --quiet
+      - name: Deployment URL
+        env:
+          URL: ${{ steps.deploy.outputs.url }}
+        run: echo "$URL"

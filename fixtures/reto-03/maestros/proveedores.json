@@ -1,0 +1,12 @@
+[
+  {
+    "nit": "900000001",
+    "activo": true,
+    "condicionPago": "P30"
+  },
+  {
+    "nit": "900000002",
+    "activo": false,
+    "condicionPago": "P30"
+  }
+]

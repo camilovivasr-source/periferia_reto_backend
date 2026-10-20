@@ -1,0 +1,5 @@
+nit: 900000002
+baseCentavos: 100000000
+ivaCentavos: 19000000
+totalCentavos: 119000000
+condicionPago: P30
