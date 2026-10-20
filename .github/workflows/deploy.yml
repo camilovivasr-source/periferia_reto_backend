@@ -1,0 +1,72 @@
+name: CI/CD · backend
+# Cada push a main o a la rama de trabajo prueba y redespliega el backend en Cloud Run.
+# Las variables (GCP_PROJECT_ID, GCP_REGION, WIF_PROVIDER, DEPLOYER_SA) las crea infra/cicd.sh.
+on:
+  push:
+    branches: [main, claude/blissful-mendel-88agwr]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: deploy-backend-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run demo
+      - run: npm run build
+
+  deploy:
+    needs: ci
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Comprobar configuración de despliegue
+        id: cfg
+        env:
+          WIF: ${{ vars.WIF_PROVIDER }}
+          SA: ${{ vars.DEPLOYER_SA }}
+        run: |
+          for n in PROJECT_ID WIF SA; do
+            if test -z "${!n}"; then
+              echo "::notice::Despliegue omitido: falta la variable de repositorio para $n. Ejecuta instalar.sh (o infra/cicd.sh) una vez para activar el despliegue automático."
+              echo "listo=false" >> "$GITHUB_OUTPUT"; exit 0
+            fi
+          done
+          echo "listo=true" >> "$GITHUB_OUTPUT"
+      - if: steps.cfg.outputs.listo == 'true'
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.WIF_PROVIDER }}
+          service_account: ${{ vars.DEPLOYER_SA }}
+      - if: steps.cfg.outputs.listo == 'true'
+        uses: google-github-actions/setup-gcloud@v2
+      - if: steps.cfg.outputs.listo == 'true'
+        name: Desplegar backend
+        run: bash infra/deploy-backend.sh
+      - if: steps.cfg.outputs.listo == 'true'
+        name: Verificar de punta a punta (vía frontend)
+        run: |
+          URL="$(gcloud run services describe periferia-frontend --region="$REGION" --project="$PROJECT_ID" --format='value(status.url)' 2>/dev/null || true)"
+          if [ -z "$URL" ]; then echo "Frontend aún no desplegado: se omite la verificación."; exit 0; fi
+          for i in 1 2 3 4 5 6; do
+            curl -fsS --max-time 30 "$URL/api/backend-health" | tee /tmp/salud.json && grep -q '"modo":"LLM"' /tmp/salud.json && exit 0
+            sleep 10
+          done
+          echo "::error::El backend no respondió en modo LLM"; exit 1

@@ -1,0 +1,20 @@
+# Front y back con un solo comando (Docker):  docker compose up --build   ->  http://localhost:3000
+# Espera el frontend en ../periferia_reto_frontend. Sin credenciales de Google arranca en modo practica;
+# para el modelo real: GEMINI_API_KEY=... docker compose up   (o AGENT_MODE=vertex con ADC).
+services:
+  backend:
+    build: .
+    environment:
+      PORT: "8080"
+      AGENT_MODE: ${AGENT_MODE:-auto}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GOOGLE_CLOUD_PROJECT: ${GOOGLE_CLOUD_PROJECT:-}
+    ports: ["8080:8080"]
+  frontend:
+    build: ../periferia_reto_frontend
+    environment:
+      PORT: "3000"
+      BACKEND_URL: http://backend:8080
+      BACKEND_AUTH: none
+    ports: ["3000:3000"]
+    depends_on: [backend]

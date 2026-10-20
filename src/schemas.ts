@@ -73,6 +73,9 @@ export type Paquete = {
   solicitud: Solicitud;
   cotizacion: {
     referencia: string | null;
+    fecha: string | null;
+    base_gravable: number | null;
+    iva: number | null;
     proveedor: string;
     nit: string | null;
     total: number | null;

@@ -8,6 +8,7 @@
 #   PROJECT_ID=mi-proyecto bash periferia_reto_backend/instalar.sh
 #
 # Idempotente: si algo falla, se arregla la causa y se vuelve a correr entero.
+# Al final deja configurado el despliegue automático: cada push redespliega (ver infra/cicd.sh).
 # Variables opcionales: PROJECT_ID REGION(us-central1) VERTEX_LOCATION(us-central1)
 #   GEMINI_MODEL(gemini-2.5-flash) RAMA FRONTEND_DIR BILLING_ACCOUNT SOLO_INFRA=true
 # ─────────────────────────────────────────────────────────────────────────────
@@ -116,26 +117,21 @@ fi
 unset TOKEN
 [ "${SOLO_INFRA:-false}" = "true" ] && { azul "Fin (SOLO_INFRA=true)"; ok "infraestructura lista"; exit 0; }
 
-BUILD_FLAG=(--build-service-account="projects/${PROJECT_ID}/serviceAccounts/${SA_BUILD}")
-despliega() { # despliega <servicio> <carpeta> <flags…>
-  local s="$1" d="$2"; shift 2
+# Los despliegues usan los mismos scripts que GitHub Actions (infra/deploy-*.sh). Si la compilación con la
+# cuenta dedicada falla, se reintenta con la cuenta de Compute (algunas organizaciones restringen la primera).
+desplegar() { # desplegar <script> [variables…]
+  local script="$1"; shift
   : > "$LOG"
-  gcloud run deploy "$s" --source="$d" --region="$REGION" --project="$PROJECT_ID" "${BUILD_FLAG[@]}" --port=8080 --quiet "$@" >"$LOG" 2>&1 && return 0
-  if [ ${#BUILD_FLAG[@]} -gt 0 ]; then
-    avisa "la compilación con ${SA_BUILD} falló; se reintenta con la cuenta de Compute"
-    dar_rol "serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" roles/run.builder
-    BUILD_FLAG=(); sleep 15
-    : > "$LOG"; gcloud run deploy "$s" --source="$d" --region="$REGION" --project="$PROJECT_ID" --port=8080 --quiet "$@" >"$LOG" 2>&1 && return 0
-  fi
-  return 1
+  env PROJECT_ID="$PROJECT_ID" REGION="$REGION" VERTEX_LOCATION="$VERTEX_LOCATION" GEMINI_MODEL="$GEMINI_MODEL" "$@" bash "$script" >"$LOG" 2>&1 && return 0
+  avisa "la compilación con ${SA_BUILD} falló; se reintenta con la cuenta de Compute"
+  dar_rol "serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com" roles/run.builder
+  sleep 15; : > "$LOG"
+  env PROJECT_ID="$PROJECT_ID" REGION="$REGION" VERTEX_LOCATION="$VERTEX_LOCATION" GEMINI_MODEL="$GEMINI_MODEL" USE_COMPUTE_BUILDER=1 "$@" bash "$script" >"$LOG" 2>&1
 }
 
 azul "5 · Backend (${SVC_BACK}, privado por IAM)"
 inf "compilando y desplegando (3 a 6 min)…"
-despliega "$SVC_BACK" "$AQUI" --service-account="$SA_BACK" --memory=512Mi --cpu=1 --min-instances=0 --max-instances=1 \
-  --concurrency=8 --timeout=120 --no-allow-unauthenticated \
-  --set-env-vars="AGENT_MODE=vertex,GEMINI_MODEL=${GEMINI_MODEL},VERTEX_LOCATION=${VERTEX_LOCATION},GOOGLE_CLOUD_PROJECT=${PROJECT_ID}" \
-  || muere "falló el despliegue del backend" "mira el detalle; suele ser permisos de compilación o un error de build"
+desplegar "$AQUI/infra/deploy-backend.sh" || muere "falló el despliegue del backend" "mira el detalle; suele ser permisos de compilación o un error de build"
 URL_BACK="$(gcloud run services describe "$SVC_BACK" --region="$REGION" --project="$PROJECT_ID" --format='value(status.url)' 2>/dev/null)"
 [ -n "$URL_BACK" ] || muere "no se pudo leer la URL del backend"
 ok "backend desplegado: ${URL_BACK}"
@@ -145,8 +141,8 @@ ok "solo el frontend puede invocar al backend"
 
 azul "6 · Frontend (${SVC_FRONT}, público)"
 inf "compilando y desplegando (2 a 4 min)…"
-despliega "$SVC_FRONT" "$DIR_FRONT" --service-account="$SA_FRONT" --memory=256Mi --cpu=1 --min-instances=0 --max-instances=2 \
-  --concurrency=20 --timeout=120 --allow-unauthenticated --set-env-vars="BACKEND_URL=${URL_BACK},BACKEND_AUTH=iam" \
+[ -f "$DIR_FRONT/infra/deploy-frontend.sh" ] || muere "el frontend no trae infra/deploy-frontend.sh" "actualiza el frontend a la rama ${RAMA}"
+desplegar "$DIR_FRONT/infra/deploy-frontend.sh" BACKEND_URL="$URL_BACK" \
   || muere "falló el despliegue del frontend" "si dice FAILED_PRECONDITION / allUsers, la organización bloquea servicios públicos: pide una excepción a un admin"
 URL_FRONT="$(gcloud run services describe "$SVC_FRONT" --region="$REGION" --project="$PROJECT_ID" --format='value(status.url)' 2>/dev/null)"
 ok "frontend desplegado: ${URL_FRONT}"
@@ -163,6 +159,10 @@ CODIGO="$(curl -s -o "$LOG" -w '%{http_code}' --max-time 110 -X POST "${URL_FRON
 if [ "$CODIGO" = 200 ] && grep -q '"oc_validar"' "$LOG" && grep -q 'RC1' "$LOG"; then ok "el agente respondió con Vertex AI: llamó a las herramientas y bloqueó sol-002 por RC1"
 elif [ "$CODIGO" = 200 ]; then avisa "el chat respondió pero no usó las herramientas como se esperaba: $(python3 -c 'import json,sys;print(json.load(open(sys.argv[1])).get("reply","")[:240])' "$LOG" 2>/dev/null)"
 else avisa "el chat devolvió HTTP ${CODIGO}: $(head -c 300 "$LOG")"; fi
+
+azul "8 · Despliegue automático con cada push (GitHub Actions)"
+if PROJECT_ID="$PROJECT_ID" REGION="$REGION" bash "$AQUI/infra/cicd.sh"; then ok "listo: un push a las ramas configuradas redespliega los servicios"
+else avisa "no se configuró el despliegue automático (ver el detalle arriba); la app ya funciona y puede reintentarse con: PROJECT_ID=${PROJECT_ID} bash infra/cicd.sh"; fi
 
 printf '\n\033[1;32m━━ LISTO\033[0m\n  URL para la defensa:  \033[1m%s\033[0m\n  Backend (privado):    %s\n' "$URL_FRONT" "$URL_BACK"
 [ ${#AVISOS[@]} -gt 0 ] && { printf '\n  Avisos:\n'; printf '   - %s\n' "${AVISOS[@]}"; }

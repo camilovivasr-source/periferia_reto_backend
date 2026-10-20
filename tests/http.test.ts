@@ -75,3 +75,38 @@ describe('API HTTP', () => {
     assert.equal((await (await fetch(base + '/api/health')).json()).ok, true);
   });
 });
+
+describe('API de analisis', () => {
+  const get = async (ruta: string) => (await fetch(base + ruta)).json();
+  it('panel, desvio, conciliacion y autoridad responden con datos reales', async () => {
+    assert.equal((await get('/api/analisis/panel')).kpis.casos, 6);
+    assert.equal((await get('/api/analisis/desvio')).resumen.casos, 6);
+    assert.equal((await get('/api/analisis/conciliacion')).filas.length, 6);
+    const a = await get('/api/analisis/autoridad?centro=CC-2020&monto=74000000');
+    assert.equal(a.consulta.requiere_escalar, true);
+  });
+
+  it('detalle de un caso con las opciones de los maestros', async () => {
+    const d = await get('/api/analisis/caso/sol-006');
+    assert.equal(d.valores.indicador_iva, null);
+    assert.ok(d.opciones.centros.some((c: { centro_costo: string }) => c.centro_costo === 'CC-1010'));
+    assert.equal((await fetch(base + '/api/analisis/caso/xyz')).status, 404);
+  });
+
+  it('simulador: valida entrada y no escribe nada', async () => {
+    const ok = await post('/api/analisis/simular', { caso: 'sol-004', cambios: { cotizacion_total: 25000000 } });
+    assert.equal(ok.status, 200);
+    assert.equal((await ok.json()).veredicto_simulado, 'APTA');
+    assert.equal((await post('/api/analisis/simular', { caso: 'sol-004', cambios: { desconocido: 1 } })).status, 400);
+    assert.equal((await post('/api/analisis/simular', { caso: '../x', cambios: { valor_total: 1 } })).status, 400);
+    assert.equal((await post('/api/analisis/simular', { caso: 'sol-004', cambios: {} })).status, 422);
+    assert.equal((await fetch(base + '/api/analisis/autoridad?centro=CC-1010')).status, 400);
+  });
+
+  it('exporta la carga masiva como CSV descargable', async () => {
+    const r = await fetch(base + '/api/exportar/carga-sap.csv');
+    assert.equal(r.status, 200);
+    assert.match(r.headers.get('content-disposition') ?? '', /carga-masiva-sap\.csv/);
+    assert.match(await r.text(), /^estado;numero_oc;solicitud_id/);
+  });
+});

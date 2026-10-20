@@ -26,6 +26,17 @@ La analista administrativa digita a mano, por cada factura, proveedor, centro de
 
 Un cambio de reglas de negocio toca `src/domain/controls/*`, nunca el servidor.
 
+**Pestaña «Análisis»** (valor agregado, solo lectura): cinco herramientas sobre los mismos casos de uso y reglas que usa el agente, expuestas en `/api/analisis/*` y `src/application/analisis/`:
+1. **Panel de control**: KPIs de cartera (creadas, por crear, bloqueadas, % sin intervención, % retroactivas, valor comprometido, ahorro estimado), reglas que más frenan y bitácora de `control.csv` con filtro; exportación de **carga masiva SAP** (Plan B del PRD 7.5) y de `control.csv`.
+2. **Desvío de proceso**: línea de tiempo por solicitud (cotización → solicitud → aprobación → factura → OC), días de desvío y retroactividad por centro de costo y por proveedor. Es la medición que pide la dirección.
+3. **Conciliación documental**: solicitud vs cotización vs factura con semáforo de tolerancia (2 %) y coherencia del IVA (IVA ÷ base de la cotización contra la tasa del maestro).
+4. **Simulador de controles** («¿qué pasaría si…?»): revalida un caso con cambios hipotéticos (valor, aprobador, centro, fecha de factura, quitar cotización…) y muestra qué controles cambian. Ocurre solo en memoria: no escribe en `fixtures/` ni en `out/`.
+5. **Autoridad de aprobación**: matriz de aprobadores y topes con el uso real por solicitud, casos aprobados por quien no tiene autoridad y la consulta «¿quién puede aprobar X en el centro Y?» (o si hay que escalar).
+
+**Despliegue continuo**: cada push a `main` o a la rama de trabajo ejecuta pruebas y redespliega el servicio en Cloud Run (`.github/workflows/deploy.yml` en ambos repos). GitHub se autentica en Google Cloud con **Workload Identity Federation** (sin claves JSON) restringida a estos dos repos y a esas ramas; `infra/cicd.sh` lo configura una vez y `infra/deploy-*.sh` es el mismo comando que usa el instalador.
+
+**Dependencias** (justificadas): `zod` (obligatoria; valida argumentos de herramientas y fixtures), `zod-to-json-schema` (publica a Gemini los mismos esquemas, sin duplicarlos), `google-auth-library` (credenciales por defecto para Vertex AI sin claves), `read-excel-file` (lectura real de `.xlsx` para `oc_leer_excel`), `dotenv` (variables en local). Dev: `typescript`, `tsx` (ejecutar TS sin compilar) y `write-excel-file` (solo para generar un `.xlsx` en las pruebas). Sin framework de UI ni de gráficos: el front es HTML/JS modular y los gráficos son SVG/CSS.
+
 ## 3. Ciclo del agente
 `Agente.turno(sessionId, mensaje)` (`src/agent/loop.ts`):
 1. Si la sesión superó `MAX_TOKENS_SESION`, responde con el límite (costo acotado).
@@ -106,12 +117,14 @@ El agente **no las bloquea**: las detecta (RC8), exige confirmación humana expl
 | HU-4 Evidencia | Hecho: `.txt` con sha256 **y** `.pdf` (P1) | Firma digital si Auditoría la exige. |
 | HU-5 Crear en SAP simulado | Hecho: secuencia desde 4500000001, idempotencia, `control.csv` | Idempotencia durable y adaptador real. |
 | HU-6 Errores | Hecho: `{ok:false,error}` legible, sin excepciones | Catálogo de errores del ERP. |
-| `oc_leer_excel` (P1 opcional) | **No hecho** | Parser `.xlsx` con dependencia justificada. |
+| `oc_leer_excel` (P1 opcional) | Hecho: lee la primera hoja de un `.xlsx` dentro de `fixtures/` u `out/` (rutas y tamaño acotados); probado con un `.xlsx` generado | Mapear columnas reales de la plantilla de solicitud y leer `.pdf`/`.eml`. |
+| Pestaña «Análisis» (5 herramientas) | Hecho | Persistir históricos más allá de `out/` y filtros por periodo. |
+| Despliegue automático por push | Hecho (Actions + WIF); requiere ejecutar `infra/cicd.sh` una vez | Entornos separados (staging/producción) y aprobación manual del paso a producción. |
 | Chat con herramientas y confirmación visibles | Hecho (SSE, tarjetas, banner) | Autenticación de usuarios. |
 | `demo.ts` sin modelo | Hecho (6 casos, idempotencia, confirmación `sol-004`) | — |
 | Bonus módulo reutilizable | Hecho (`modulo/`, generado de las mismas fuentes y verificado en pruebas) | — |
-| URL pública | Despliegue manual documentado (`INSTRUCTIVO_CLOUD_RUN.md`); **no desplegado desde este entorno** | Ejecutar con proyecto y clave reales. |
-| Probado contra Gemini real | **No** (sin clave en este entorno) | `npm run check:gemini` y un recorrido manual antes de la defensa. |
+| URL pública | Desplegada en Cloud Run con `instalar.sh` (frontend público, backend privado por IAM) | Dominio propio y autenticación de usuarios. |
+| Probado contra Gemini real | Parcial: el instalador llama a Vertex AI y hace un chat real al desplegar; las pruebas automáticas usan respuestas simuladas | Evaluación de calidad del agente con un conjunto de conversaciones. |
 
 ## 11. Uso de IA
 Construí la solución con **Claude Code** (Anthropic): lectura del PRD y la guía de estudio, diseño de la arquitectura, escritura del código, pruebas y documentación; yo revisé y debo poder explicar cada línea. Se usó además la **guía de estudio** del repositorio base (educativa, no oficial) como referencia de arquitectura (puertos/adaptadores, barrera de creación, snapshot/huella).

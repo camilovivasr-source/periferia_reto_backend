@@ -90,7 +90,7 @@ export class Agente {
         for (const llamada of pedidas) llamadas.push(await this.ejecutar(s, ctx, llamada, onEvento));
       }
       const resumen = llamadas.map((c) => c.resumen).slice(-3).join(' | ');
-      const reply = `Alcance el limite de ${this.o.maxIteraciones} pasos en este turno. Esto es lo que logre: ${resumen}. Dime si quieres que continue.`;
+      const reply = `Alcance el limite de ${this.o.maxIteraciones} pasos en este turno. Lo que tengo: ${resumen}. Lo que falta: terminar el flujo de esta solicitud. Dime si quieres que continue.`;
       s.mensajes.push({ rol: 'assistant', contenido: reply });
       return reply;
     } catch (e) {

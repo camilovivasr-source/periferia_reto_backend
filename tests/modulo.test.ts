@@ -20,13 +20,15 @@ describe('Modulo reutilizable (bonus 9.4)', () => {
 
 describe('Adaptador Gemini (sin red)', () => {
   it('serializa herramientas, conserva partes nativas y agrupa respuestas de herramientas', async () => {
-    const cuerpos: Array<Record<string, any>> = [];
+    type Declaracion = { name: string; parameters?: { type: string; properties: Record<string, { type: string }> } };
+    type Cuerpo = { tools: Array<{ functionDeclarations: Declaracion[] }>; systemInstruction: { parts: Array<{ text: string }> }; contents: Array<{ role: string; parts: Array<{ thoughtSignature?: string; functionResponse?: { id?: string; response: unknown } }> }> };
+    const cuerpos: Cuerpo[] = [];
     const respuestas = [
       { candidates: [{ content: { parts: [{ thoughtSignature: 'firma', functionCall: { id: 'f1', name: 'oc_validar', args: { caso: 'sol-001' } } }] } }], usageMetadata: { totalTokenCount: 42 } },
       { candidates: [{ content: { parts: [{ text: 'Listo' }] } }] },
     ];
     const http = (async (_u: unknown, init: RequestInit) => {
-      cuerpos.push(JSON.parse(String(init.body)));
+      cuerpos.push(JSON.parse(String(init.body)) as Cuerpo);
       assert.equal((init.headers as Record<string, string>)['x-goog-api-key'], 'clave-de-prueba');
       return new Response(JSON.stringify(respuestas[cuerpos.length - 1]), { status: 200 });
     }) as typeof fetch;
@@ -34,22 +36,22 @@ describe('Adaptador Gemini (sin red)', () => {
     const r1 = await g.enviar([{ rol: 'system', contenido: 'sistema' }, { rol: 'user', contenido: 'valida sol-001' }], definiciones());
     assert.equal(r1.tokens, 42);
     assert.deepEqual(r1.mensaje.llamadas, [{ id: 'f1', nombre: 'oc_validar', args: { caso: 'sol-001' } }]);
-    assert.equal(cuerpos[0].tools[0].functionDeclarations.length, 8);
-    const sinArgs = cuerpos[0].tools[0].functionDeclarations.find((f: any) => f.name === "oc_listar_casos");
+    assert.equal(cuerpos[0].tools[0].functionDeclarations.length, 9);
+    const sinArgs = cuerpos[0].tools[0].functionDeclarations.find((f) => f.name === 'oc_listar_casos')!;
     assert.equal("parameters" in sinArgs, false, "sin argumentos no se envia parameters (Vertex lo rechaza)");
-    const validar = cuerpos[0].tools[0].functionDeclarations.find((f: any) => f.name === 'oc_validar');
-    assert.equal(validar.parameters.type, 'OBJECT');
-    assert.equal(validar.parameters.properties.caso.type, 'STRING');
-    assert.equal('paquete' in validar.parameters.properties, false, 'los objetos libres ignorados no se publican');
-    assert.equal('additionalProperties' in validar.parameters, false);
+    const validar = cuerpos[0].tools[0].functionDeclarations.find((f) => f.name === 'oc_validar')!;
+    assert.equal(validar.parameters?.type, 'OBJECT');
+    assert.equal(validar.parameters?.properties.caso.type, 'STRING');
+    assert.equal('paquete' in (validar.parameters?.properties ?? {}), false, 'los objetos libres ignorados no se publican');
+    assert.equal('additionalProperties' in (validar.parameters ?? {}), false);
     assert.equal(cuerpos[0].systemInstruction.parts[0].text, 'sistema');
 
     await g.enviar([{ rol: 'system', contenido: 'sistema' }, { rol: 'user', contenido: 'valida sol-001' }, r1.mensaje, { rol: 'tool', llamadaId: 'f1', nombre: 'oc_validar', contenido: '{"ok":true}' }], definiciones());
     const contents = cuerpos[1].contents;
     assert.equal(contents[1].role, 'model');
     assert.equal(contents[1].parts[0].thoughtSignature, 'firma');
-    assert.equal(contents[2].parts[0].functionResponse.id, 'f1');
-    assert.deepEqual(contents[2].parts[0].functionResponse.response, { result: { ok: true } });
+    assert.equal(contents[2].parts[0].functionResponse?.id, 'f1');
+    assert.deepEqual(contents[2].parts[0].functionResponse?.response, { result: { ok: true } });
   });
 
   it('errores del proveedor: mensaje claro, sin filtrar la clave', async () => {

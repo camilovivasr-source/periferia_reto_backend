@@ -17,6 +17,8 @@ const envSchema = z.object({
   MAX_TOKENS_SESION: z.coerce.number().int().min(1000).default(300_000),
   LLM_TIMEOUT_MS: z.coerce.number().int().min(1000).default(45_000),
   ACTOR: z.string().min(1).default('analista-administrativa'),
+  // Supuesto de negocio para el indicador de ahorro: minutos de digitacion manual por OC.
+  MINUTOS_MANUALES_POR_OC: z.coerce.number().min(0).max(240).default(12),
 });
 
 export type Config = ReturnType<typeof readConfig>;
@@ -44,5 +46,6 @@ export function readConfig(env: NodeJS.ProcessEnv = process.env, directory: stri
     maxTokensSesion: e.MAX_TOKENS_SESION,
     llmTimeoutMs: e.LLM_TIMEOUT_MS,
     actor: e.ACTOR,
+    minutosManualesPorOc: e.MINUTOS_MANUALES_POR_OC,
   };
 }

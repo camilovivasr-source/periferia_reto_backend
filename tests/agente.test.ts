@@ -105,6 +105,7 @@ describe('Barreras frente a un modelo que se equivoca o es manipulado', () => {
     const t = await a.turno('sesion-0006', 'lee sol-001');
     assert.equal(t.toolCalls.length, 3);
     assert.match(t.reply, /limite de 3 pasos/);
+    assert.match(t.reply, /Lo que falta/);
   });
 
   it('un error del proveedor se muestra en claro y la sesion sigue viva', async () => {
@@ -144,7 +145,7 @@ describe('Conocimiento, prompt y registro de llamadas', () => {
 
   it('todas las herramientas publican un JSON schema con descripciones', () => {
     const defs = definiciones();
-    assert.deepEqual(defs.map((d) => d.name), ['oc_leer_paquete', 'oc_validar', 'oc_construir_payload', 'oc_generar_evidencia', 'oc_crear', 'oc_listar_casos', 'oc_consultar_maestro', 'oc_resumen_control']);
+    assert.deepEqual(defs.map((d) => d.name), ['oc_leer_paquete', 'oc_validar', 'oc_construir_payload', 'oc_generar_evidencia', 'oc_crear', 'oc_leer_excel', 'oc_listar_casos', 'oc_consultar_maestro', 'oc_resumen_control']);
     for (const d of defs) {
       assert.ok(d.description.length > 20);
       const p = d.parameters as { properties: Record<string, { description?: string }> };

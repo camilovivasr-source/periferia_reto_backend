@@ -110,3 +110,24 @@ describe('Parsers', () => {
     assert.deepEqual([c.referencia, c.nit, c.total, c.moneda, c.validez_hasta], ['COT-1', '900555111', 11400000, 'COP', '2026-09-17']);
   });
 });
+
+describe('oc_leer_excel (P1)', () => {
+  it('lee un .xlsx real, usa la primera fila como encabezado y rechaza rutas fuera de fixtures/out', async () => {
+    const { default: escribir } = await import('write-excel-file/node');
+    const ruta = path.join(process.cwd(), 'fixtures', 'reto-03', 'tmp-solicitud.xlsx');
+    await escribir([[{ value: 'solicitud_id' }, { value: 'valor_total' }], [{ value: 'SOL-9', type: String }, { value: 1200, type: Number }]], { filePath: ruta });
+    try {
+      const r = await ejecutor()('oc_leer_excel', { ruta: 'fixtures/reto-03/tmp-solicitud.xlsx' });
+      assert.equal(r.ok, true, r.error);
+      const d = r.data as { total: number; filas: Array<Record<string, unknown>> };
+      assert.equal(d.total, 1);
+      assert.deepEqual(d.filas[0], { solicitud_id: 'SOL-9', valor_total: 1200 });
+    } finally {
+      (await import('node:fs/promises')).rm(ruta, { force: true });
+    }
+    for (const mala of ['package.json', '../../etc/passwd.xlsx', '/etc/passwd', 'fixtures/reto-03/inexistente.xlsx', 'fixtures/reto-03/maestros/proveedores.json']) {
+      const r = await ejecutor()('oc_leer_excel', { ruta: mala });
+      assert.equal(r.ok, false, mala);
+    }
+  });
+});

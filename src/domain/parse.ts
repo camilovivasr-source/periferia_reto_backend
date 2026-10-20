@@ -16,8 +16,13 @@ export function parsearCotizacion(texto: string): Cotizacion {
     descripcion: m[1].trim(),
     cantidad: parsearMonto(m[2]),
   }));
+  const base = /^Base gravable:\s*(?:COP|USD)?\s*([\d.,]+)/im.exec(texto);
+  const iva = /^IVA[^:\n]*:\s*(?:COP|USD)?\s*([\d.,]+)/im.exec(texto);
   return {
     referencia: linea(texto, /^COTIZACI[ÓO]N\s+(\S+)/m),
+    fecha,
+    base_gravable: base ? parsearMonto(base[1]) : null,
+    iva: iva ? parsearMonto(iva[1]) : null,
     proveedor: linea(texto, /^Proveedor:\s*(.+)$/m) ?? '',
     nit: nit ? normalizarNit(nit) : null,
     total: total ? parsearMonto(total[2]) : null,

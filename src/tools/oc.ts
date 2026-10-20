@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { consultarMaestro, MAESTROS, resumenCasos, resumenControl } from '../application/consultas.js';
 import { construirOrdenCaso, crearOrdenCaso, generarEvidenciaCaso, leerPaqueteCaso, validarCaso } from '../application/ordenes.js';
 import { ok, seguro } from '../application/resultado.js';
+import { leerExcel } from '../application/excel.js';
 import { entornoDe } from '../data.js';
 import type { ToolDef } from './types.js';
 
@@ -50,6 +51,12 @@ export const crear: ToolDef<{ caso: typeof caso; payload: ReturnType<typeof obje
     confirmado: z.boolean().optional().describe('true solo si el usuario acaba de confirmar explicitamente las confirmaciones mostradas'),
   },
   execute: (args, ctx) => seguro(() => crearOrdenCaso(ctx, args.caso, args.confirmado === true)),
+};
+
+export const leer_excel: ToolDef<{ ruta: z.ZodString }> = {
+  description: 'Lee un archivo .xlsx real de solicitud (dentro de fixtures/ u out/) y devuelve sus filas como objetos usando la primera fila como encabezado. Usar solo si el usuario indica un Excel; los casos de fixtures ya vienen normalizados.',
+  args: { ruta: z.string().max(200).describe('Ruta relativa a la raiz del proyecto, por ejemplo "fixtures/reto-03/solicitudes/sol-001/solicitud.xlsx"') },
+  execute: (args, ctx) => seguro(async () => ok(await leerExcel(ctx, args.ruta))),
 };
 
 // ── Consultas de solo lectura: permiten responder preguntas sin inventar datos ──

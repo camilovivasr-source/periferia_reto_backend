@@ -9,6 +9,9 @@ import { resumenCasos } from '../application/consultas.js';
 import type { Config } from '../config.js';
 import { entornoDe } from '../data.js';
 import { CuerpoGrande, leerJson } from './cuerpo.js';
+import { rutasAnalisis } from './rutas-analisis.js';
+import { adjunto, json, type Peticion, type Ruta } from './tipos.js';
+import { DatosError } from '../data.js';
 
 const chatSchema = z
   .object({
@@ -19,31 +22,21 @@ const chatSchema = z
 
 const TIPOS: Record<string, string> = { pdf: 'application/pdf', txt: 'text/plain; charset=utf-8', json: 'application/json; charset=utf-8', csv: 'text/csv; charset=utf-8' };
 
-/** Contexto de una peticion: lo que cada ruta necesita para responder. */
-type Peticion = { req: IncomingMessage; res: ServerResponse; url: URL; requestId: string; coincidencia: RegExpExecArray };
-type Ruta = { metodo: 'GET' | 'POST'; patron: RegExp; manejar(p: Peticion): Promise<void> };
-
 export function crearManejador(config: Config, agente: Agente) {
   const env = entornoDe(config.directory, { FIXTURES_DIR: config.fixturesDir, OUT_DIR: config.outDir });
-
-  const json = (res: ServerResponse, status: number, data: unknown) => {
-    res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
-    res.end(JSON.stringify(data));
-  };
 
   /** Descarga de un archivo de out/ con nombre de la lista cerrada de las rutas (nunca una ruta arbitraria). */
   const descargar = async ({ res, requestId }: Peticion, ruta: string, nombre: string) => {
     try {
       const cuerpo = await readFile(ruta);
-      res.writeHead(200, { 'Content-Type': TIPOS[nombre.split('.').pop()!], 'Content-Disposition': `attachment; filename="${nombre}"`, 'Cache-Control': 'no-store' });
-      res.end(cuerpo);
+      adjunto(res, TIPOS[nombre.split('.').pop()!], nombre, cuerpo);
     } catch {
       json(res, 404, { error: 'Archivo aun no generado: procese la solicitud primero.', requestId });
     }
   };
 
   const rutas: Ruta[] = [
-    { metodo: 'GET', patron: /^\/(?:api\/)?health$/, manejar: async ({ res }) => json(res, 200, { ok: true, ...agente.proveedor }) },
+    { metodo: 'GET', patron: /^\/(?:api\/)?health$/, manejar: async ({ res }) => json(res, 200, { ok: true, provider: agente.proveedor.proveedor, model: agente.proveedor.modelo, ...agente.proveedor }) },
     {
       metodo: 'GET',
       patron: /^\/api\/casos$/,
@@ -68,6 +61,7 @@ export function crearManejador(config: Config, agente: Agente) {
       },
     },
     { metodo: 'POST', patron: /^\/api\/chat$/, manejar: (p) => chat(p) },
+    ...rutasAnalisis(config),
   ];
 
   /** Chat: respuesta JSON, o SSE (tool_start / tool_end / complete) si el cliente lo pide. */
@@ -101,6 +95,7 @@ export function crearManejador(config: Config, agente: Agente) {
       json(res, 404, { error: 'Ruta no encontrada', requestId });
     } catch (e) {
       if (e instanceof z.ZodError) return json(res, 400, { error: 'Datos no validos', detalles: e.issues.map((i) => `${i.path.join('.') || 'cuerpo'}: ${i.message}`), requestId });
+      if (e instanceof DatosError) return json(res, 422, { error: e.message, requestId });
       if (e instanceof CuerpoGrande) return json(res, 413, { error: e.message, requestId });
       if (e instanceof SyntaxError) return json(res, 400, { error: 'JSON malformado', requestId });
       console.error(`[${requestId}]`, e instanceof Error ? e.message : e);

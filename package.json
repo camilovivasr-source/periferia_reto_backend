@@ -8,6 +8,7 @@
   },
   "scripts": {
     "dev": "node --import tsx src/server.ts",
+    "dev:all": "node scripts/dev-all.mjs",
     "start": "node dist/src/server.js",
     "build": "node scripts/build.mjs",
     "demo": "node --import tsx demo.ts",
@@ -18,12 +19,14 @@
   "dependencies": {
     "dotenv": "^16.5.0",
     "google-auth-library": "^9.15.1",
+    "read-excel-file": "^5.8.8",
     "zod": "^3.24.2",
     "zod-to-json-schema": "^3.24.6"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",
     "tsx": "^4.20.0",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "write-excel-file": "^2.3.10"
   }
 }
